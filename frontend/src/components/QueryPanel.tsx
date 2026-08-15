@@ -68,12 +68,14 @@ function MessageText({ text, streaming }: { text: string; streaming: boolean }) 
 const SAMPLE_QUESTIONS = [
   "Which counties should we prioritize for vaccination outreach this month?",
   "Design an intervention plan for the Permian Basin cluster",
-  "Which counties have the worst combination of low MMR coverage and high mobility?",
+  "How do we approach vaccine-hesitant communities with high religious exemption rates?",
   "How many children are unprotected in HIGH and CRITICAL counties?",
-  "What would it take to bring Gaines County below the HIGH threshold?",
+  "What does the wastewater signal actually tell us, and what are its limitations?",
   "Compare risk profiles of our top 10 most at-risk counties",
   "Which border counties need immediate attention and why?",
-  "What surveillance gaps should we close to get earlier outbreak warning?",
+  "Explain how measles achieves outbreak conditions — what has to go wrong?",
+  "What early warning signs preceded the Gaines County 2025 outbreak?",
+  "How should we communicate risk to parents in exemption-heavy communities?",
 ];
 
 export function QueryPanel() {
@@ -204,10 +206,10 @@ export function QueryPanel() {
           AI Advisor
         </div>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2744" }}>
-          Ask anything about Texas measles risk or intervention strategy
+          Ask anything about measles, public health response, or the Texas data
         </div>
         <div style={{ fontSize: 11, color: "#7A92AB", marginTop: 2 }}>
-          Data queries · Intervention planning · Outbreak analysis · Policy recommendations
+          Outbreak analysis · Intervention planning · Epidemiology · Policy · Community engagement
         </div>
       </div>
 
@@ -216,7 +218,7 @@ export function QueryPanel() {
         {messages.length === 0 && (
           <div>
             <div style={{ fontSize: 12, color: "#7A92AB", marginBottom: 14 }}>
-              Ask about data, interventions, outbreak risk, or strategy — or try a sample:
+              Ask about the data, measles biology, outbreak history, intervention design, or communication strategy — or try a sample:
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {SAMPLE_QUESTIONS.map((q) => (
