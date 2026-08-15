@@ -66,11 +66,14 @@ function MessageText({ text, streaming }: { text: string; streaming: boolean }) 
 }
 
 const SAMPLE_QUESTIONS = [
-  "Which counties have MMR coverage below 85%?",
-  "What are the top 5 highest-risk counties and their scores?",
-  "How many counties are in each risk tier?",
-  "Which border counties have low vaccination coverage?",
-  "Compare Gaines County to the state average",
+  "Which counties should we prioritize for vaccination outreach this month?",
+  "Design an intervention plan for the Permian Basin cluster",
+  "Which counties have the worst combination of low MMR coverage and high mobility?",
+  "How many children are unprotected in HIGH and CRITICAL counties?",
+  "What would it take to bring Gaines County below the HIGH threshold?",
+  "Compare risk profiles of our top 10 most at-risk counties",
+  "Which border counties need immediate attention and why?",
+  "What surveillance gaps should we close to get earlier outbreak warning?",
 ];
 
 export function QueryPanel() {
@@ -198,13 +201,13 @@ export function QueryPanel() {
         padding: "12px 28px", flexShrink: 0,
       }}>
         <div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.14em", color: "#7A92AB", marginBottom: 2 }}>
-          AI Data Query
+          AI Advisor
         </div>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2744" }}>
-          Ask questions about Texas measles hotspot data
+          Ask anything about Texas measles risk or intervention strategy
         </div>
         <div style={{ fontSize: 11, color: "#7A92AB", marginTop: 2 }}>
-          Claude Opus queries the 254-county database and interprets results
+          Data queries · Intervention planning · Outbreak analysis · Policy recommendations
         </div>
       </div>
 
@@ -213,7 +216,7 @@ export function QueryPanel() {
         {messages.length === 0 && (
           <div>
             <div style={{ fontSize: 12, color: "#7A92AB", marginBottom: 14 }}>
-              Try a question:
+              Ask about data, interventions, outbreak risk, or strategy — or try a sample:
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {SAMPLE_QUESTIONS.map((q) => (
