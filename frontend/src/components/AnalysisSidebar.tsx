@@ -176,7 +176,7 @@ interface Props {
 }
 
 export function AnalysisSidebar({ breakdown, isLoading, onSimulate }: Props) {
-  const [activeTab, setActiveTab] = useState<SidebarTab>("ai");
+  const [activeTab, setActiveTab] = useState<SidebarTab>("data");
   const tierColor = breakdown ? (TIER_COLOR[breakdown.risk_tier] ?? "#4A5E78") : "#4A5E78";
 
   return (
@@ -228,7 +228,7 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate }: Props) {
         display: "flex", borderBottom: "1px solid #D0DAE8",
         background: "#f9fafc", flexShrink: 0,
       }}>
-        {(["ai", "data"] as SidebarTab[]).map((t) => (
+        {(["data", "ai"] as SidebarTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
@@ -244,7 +244,7 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate }: Props) {
               transition: "color 0.12s, background 0.12s",
             }}
           >
-            {t === "ai" ? "AI Analysis" : "Data"}
+            {t === "data" ? "Data" : "AI Analysis"}
           </button>
         ))}
       </div>
@@ -290,7 +290,6 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate }: Props) {
             <AIAnalyst
               fips={breakdown.fips}
               countyName={breakdown.county_name}
-              autoRun
             />
           </div>
 
