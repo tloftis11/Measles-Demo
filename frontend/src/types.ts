@@ -15,12 +15,15 @@ export interface CountyScore {
 export interface ScoreBreakdown extends CountyScore {
   coverage_gap_score: number;
   exemption_score: number;
+  district_variance_score: number;
   incidence_score: number;
   wastewater_score: number;
   positivity_score: number;
   mobility_score: number;
   community_score: number;
   border_score: number;
+  score_velocity: number;
+  velocity_modifier: number;
   mmr_coverage_pct: number;
   nonmedical_exempt_pct: number;
   recent_cases: number;

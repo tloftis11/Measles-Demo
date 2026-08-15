@@ -66,9 +66,11 @@ interface Props {
   fips: string;
   countyName: string;
   autoRun?: boolean;
+  leaId?: string;       // when set, routes to district-analyst endpoint
+  districtName?: string;
 }
 
-export function AIAnalyst({ fips, countyName, autoRun }: Props) {
+export function AIAnalyst({ fips, countyName, autoRun, leaId, districtName }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [text, setText] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -80,10 +82,14 @@ export function AIAnalyst({ fips, countyName, autoRun }: Props) {
     setErrorMsg("");
     setStatus("loading");
     try {
-      const resp = await fetch(`${BASE}/api/ai/analyst`, {
+      const endpoint = leaId ? `${BASE}/api/ai/district-analyst` : `${BASE}/api/ai/analyst`;
+      const body = leaId
+        ? JSON.stringify({ fips: targetFips, lea_id: leaId, state: "tx" })
+        : JSON.stringify({ fips: targetFips, state: "tx" });
+      const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fips: targetFips, state: "tx" }),
+        body,
         signal,
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -117,7 +123,7 @@ export function AIAnalyst({ fips, countyName, autoRun }: Props) {
     }
   }, []);
 
-  // When fips changes: reset + auto-start if autoRun
+  // When fips or leaId changes: reset + auto-start if autoRun
   useEffect(() => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -130,7 +136,7 @@ export function AIAnalyst({ fips, countyName, autoRun }: Props) {
       setErrorMsg("");
     }
     return () => ctrl.abort();
-  }, [fips, autoRun, doFetch]);
+  }, [fips, leaId, autoRun, doFetch]);
 
   const handleClick = () => {
     if (status === "streaming" || status === "loading") {
@@ -165,7 +171,7 @@ export function AIAnalyst({ fips, countyName, autoRun }: Props) {
             fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em",
             color: "#7A92AB", fontFamily: "'Trebuchet MS', Arial, sans-serif",
           }}>
-            {status === "loading"   ? `Analyzing ${countyName}…`
+            {status === "loading"   ? `Analyzing ${districtName ?? countyName}…`
              : status === "streaming" ? "Streaming analysis"
              : isDone               ? "Analysis complete"
              : "Claude Opus · AI Analysis"}
@@ -204,7 +210,7 @@ export function AIAnalyst({ fips, countyName, autoRun }: Props) {
             }} />
           ))}
           <span style={{ fontSize: 11, color: "#7A92AB", marginLeft: 6, fontFamily: "'Trebuchet MS', Arial, sans-serif" }}>
-            Analyzing {countyName} County…
+            Analyzing {districtName ?? `${countyName} County`}…
           </span>
         </div>
       )}
@@ -216,7 +222,9 @@ export function AIAnalyst({ fips, countyName, autoRun }: Props) {
           borderRadius: 8, padding: "20px 16px", textAlign: "center",
         }}>
           <div style={{ fontSize: 12, color: "#7A92AB", marginBottom: 12, fontFamily: "'Trebuchet MS', Arial, sans-serif" }}>
-            AI analysis of {countyName} County — risk drivers, trend context, and recommended actions.
+            {districtName
+              ? `AI analysis of ${districtName} — vaccination risk and targeted interventions.`
+              : `AI analysis of ${countyName} County — risk drivers, trend context, and recommended actions.`}
           </div>
           <button
             onClick={handleClick}
