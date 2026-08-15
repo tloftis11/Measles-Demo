@@ -60,6 +60,13 @@ export interface ScoreHistoryPoint {
   tier: string;
 }
 
+export interface NewsBriefing {
+  is_fresh: boolean;
+  fetched_at: string | null;
+  briefing: string | null;
+  sources: string[];
+}
+
 export interface SimResult {
   fips: string;
   peak_day: number;

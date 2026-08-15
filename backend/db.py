@@ -103,6 +103,15 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection) -> None:
         )
     """)
 
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS news_cache (
+            id           INTEGER PRIMARY KEY,
+            fetched_at   TEXT NOT NULL,
+            briefing     TEXT NOT NULL,
+            sources_json TEXT DEFAULT '[]'
+        )
+    """)
+
     # Seed if empty
     row = con.execute("SELECT COUNT(*) FROM geographies").fetchone()
     if row and row[0] == 0:

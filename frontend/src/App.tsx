@@ -6,11 +6,12 @@ import { AnalysisSidebar } from "./components/AnalysisSidebar";
 import { SimPanel } from "./components/SimPanel";
 import { QueryPanel } from "./components/QueryPanel";
 import { MethodologyPanel } from "./components/MethodologyPanel";
+import { NewsPanel } from "./components/NewsPanel";
 import type { ScoreBreakdown } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
-type Tab = "map" | "simulate" | "query" | "methodology";
+type Tab = "map" | "simulate" | "query" | "methodology" | "news";
 
 const TIER_COLOR: Record<string, string> = {
   CRITICAL: "#C22828",
@@ -24,6 +25,7 @@ const TAB_LABELS: Record<Tab, string> = {
   simulate:    "Simulate",
   query:       "Query",
   methodology: "Methodology",
+  news:        "News",
 };
 
 export default function App() {
@@ -59,7 +61,7 @@ export default function App() {
         </div>
 
         <nav style={{ display: "flex", gap: 2, marginLeft: 16 }}>
-          {(["map", "simulate", "query", "methodology"] as Tab[]).map((t) => (
+          {(["map", "simulate", "query", "methodology", "news"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -165,6 +167,9 @@ export default function App() {
 
         {/* METHODOLOGY TAB */}
         {tab === "methodology" && <MethodologyPanel />}
+
+        {/* NEWS TAB */}
+        {tab === "news" && <NewsPanel />}
       </div>
     </div>
   );

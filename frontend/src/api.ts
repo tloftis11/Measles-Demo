@@ -1,4 +1,4 @@
-import type { CountyScore, ScoreBreakdown, SimResult, DistrictBreakdown, ScoreHistoryPoint } from "./types";
+import type { CountyScore, ScoreBreakdown, SimResult, DistrictBreakdown, ScoreHistoryPoint, NewsBriefing } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -27,4 +27,6 @@ export const api = {
 
   countyHistory: (state: string, fips: string) =>
     get<ScoreHistoryPoint[]>(`/api/districts/${state}/${fips}/history`),
+
+  getNews: () => get<NewsBriefing>("/api/news"),
 };

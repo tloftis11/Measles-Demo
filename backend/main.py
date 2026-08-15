@@ -14,6 +14,7 @@ from api.ai import router as ai_router
 from api.geojson import router as geojson_router
 from api.query import router as query_router
 from api.districts import router as districts_router
+from api.news import router as news_router
 
 app = FastAPI(
     title="Measles Hotspot API",
@@ -38,6 +39,7 @@ app.include_router(ai_router)
 app.include_router(geojson_router)
 app.include_router(query_router)
 app.include_router(districts_router)
+app.include_router(news_router)
 
 
 @app.get("/health")

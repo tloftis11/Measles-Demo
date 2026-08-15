@@ -15,6 +15,10 @@ backend/.env
 frontend/node_modules/
 frontend/dist/
 
+# DuckDB runtime files
+*.duckdb
+*.duckdb.wal
+
 # OS
 .DS_Store
 Thumbs.db
