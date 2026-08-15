@@ -1,0 +1,23 @@
+# Python — reinstalled inside the image
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Secrets — never bake into image
+backend/.env
+
+# Node — reinstalled in stage 1
+frontend/node_modules/
+frontend/dist/
+
+# Version control
+.git/
+.gitignore
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Scripts output (data/ is intentionally included — DuckDB gets baked in)
+scripts/__pycache__/

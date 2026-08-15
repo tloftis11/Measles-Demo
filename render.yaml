@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: measles-hotspot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    plan: starter        # always-on; upgrade to standard for more RAM if needed
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false      # set this secret in the Render dashboard
+      - key: ALLOWED_ORIGINS
+        value: "*"       # same-origin in prod; wildcard is safe for a demo
