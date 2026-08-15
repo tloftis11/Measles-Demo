@@ -131,7 +131,6 @@ function DistrictTable({ fips }: { fips: string }) {
                         : d.mmr_coverage_pct < 85 ? "#D45F00"
                         : d.mmr_coverage_pct < 92 ? "#C9920C"
                         : "#1E8A4C";
-        const below95 = d.mmr_coverage_pct < 95;
         return (
           <div key={d.lea_id} style={{
             display: "grid", gridTemplateColumns: "1fr 52px 52px",

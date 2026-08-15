@@ -25,7 +25,6 @@ export function SimPanel({ counties, initialFips }: Props) {
 
   const county = counties.find((c) => c.fips === fips);
   // Infer actual coverage from existing score (coverage_score inversely maps) — use a lookup sentinel
-  const actualCoverage = (county as any)?.mmr_coverage_pct as number | undefined;
 
   const run = async (overrideCovPct?: number) => {
     setLoading(true);
