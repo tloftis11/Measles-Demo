@@ -30,7 +30,7 @@ const TAB_LABELS: Record<Tab, string> = {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("map");
-  const [selectedFips, setSelectedFips] = useState<string | null>("48169"); // Gaines County default
+  const [selectedFips, setSelectedFips] = useState<string | null>(null);
 
   const { data: breakdown, isLoading: breakdownLoading } = useQuery({
     queryKey: ["breakdown", "tx", selectedFips],
