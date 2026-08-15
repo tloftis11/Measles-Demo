@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import { HotspotMap } from "./components/Map";
-import { ScorePanel } from "./components/ScorePanel";
+import { AnalysisSidebar } from "./components/AnalysisSidebar";
 import { SimPanel } from "./components/SimPanel";
 import { QueryPanel } from "./components/QueryPanel";
 import { MethodologyPanel } from "./components/MethodologyPanel";
@@ -30,7 +30,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("map");
   const [selectedFips, setSelectedFips] = useState<string | null>(null);
 
-  const { data: breakdown } = useQuery({
+  const { data: breakdown, isLoading: breakdownLoading } = useQuery({
     queryKey: ["breakdown", "tx", selectedFips],
     queryFn: () => api.countyBreakdown("tx", selectedFips!),
     enabled: !!selectedFips,
@@ -54,12 +54,10 @@ export default function App() {
         display: "flex", alignItems: "center", gap: 24,
         flexShrink: 0, height: 52,
       }}>
-        {/* Brand */}
         <div style={{ fontSize: 15, fontWeight: 700 }}>
           Measles Hotspot Detection
         </div>
 
-        {/* Tabs */}
         <nav style={{ display: "flex", gap: 2, marginLeft: 16 }}>
           {(["map", "simulate", "query", "methodology"] as Tab[]).map((t) => (
             <button
@@ -85,7 +83,6 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Export */}
         <div style={{ marginLeft: "auto" }}>
           <a
             href={`${API_BASE}/api/scores/tx/export/csv`}
@@ -105,21 +102,17 @@ export default function App() {
       {/* ── Body ── */}
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
 
-        {/* MAP TAB */}
-        {tab === "map" && (
-          <>
+        {/* MAP TAB — always a flex row: 60% map + 40% sidebar */}
+        <div style={{
+          display: tab === "map" ? "flex" : "none",
+          height: "100%", width: "100%",
+        }}>
+          {/* Left: map + legend overlay */}
+          <div style={{ flex: "0 0 60%", position: "relative", overflow: "hidden" }}>
             <HotspotMap
               onSelect={(fips) => { setSelectedFips(fips); setTab("map"); }}
               selectedFips={selectedFips}
             />
-
-            {breakdown && (
-              <ScorePanel
-                data={breakdown as ScoreBreakdown}
-                onClose={() => setSelectedFips(null)}
-                onSimulate={() => setTab("simulate")}
-              />
-            )}
 
             {/* Legend */}
             <div style={{
@@ -128,7 +121,10 @@ export default function App() {
               boxShadow: "0 2px 12px rgba(0,0,0,0.12)", fontSize: 11,
               fontFamily: "'Trebuchet MS', Arial, sans-serif",
             }}>
-              <div style={{ fontWeight: 700, color: "#1A2744", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 10 }}>
+              <div style={{
+                fontWeight: 700, color: "#1A2744", marginBottom: 6,
+                textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 10,
+              }}>
                 Risk Tier
               </div>
               {(["CRITICAL", "HIGH", "MODERATE", "LOW"] as const).map((tier) => (
@@ -137,12 +133,24 @@ export default function App() {
                   <span style={{ color: "#4A5E78" }}>{tier}</span>
                 </div>
               ))}
-              <div style={{ marginTop: 8, borderTop: "1px solid #e8eef6", paddingTop: 6, color: "#7A92AB", lineHeight: 1.5 }}>
+              <div style={{
+                marginTop: 8, borderTop: "1px solid #e8eef6",
+                paddingTop: 6, color: "#7A92AB", lineHeight: 1.5,
+              }}>
                 Gray = no score data<br />Click county for details
               </div>
             </div>
-          </>
-        )}
+          </div>
+
+          {/* Right: analysis sidebar */}
+          <div style={{ flex: "0 0 40%", height: "100%", overflow: "hidden" }}>
+            <AnalysisSidebar
+              breakdown={breakdown as ScoreBreakdown | undefined}
+              isLoading={breakdownLoading && !!selectedFips}
+              onSimulate={() => setTab("simulate")}
+            />
+          </div>
+        </div>
 
         {/* SIMULATE TAB */}
         {tab === "simulate" && (
