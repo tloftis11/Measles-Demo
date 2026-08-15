@@ -49,26 +49,21 @@ def get_scored_geojson(state: str):
 
     con = get_connection()
 
-    # Ensure scores exist for today
+    # Use the latest available score date; compute today's only if nothing exists
     today = date.today().isoformat()
-    cached = con.execute(
-        """SELECT COUNT(*) FROM hotspot_scores hs
-           JOIN geographies g ON hs.fips = g.fips
-           WHERE g.state_abbr = ? AND hs.score_date = ?""",
-        [state.upper(), today],
-    ).fetchone()
-    if not cached or cached[0] == 0:
+    latest_row = con.execute("SELECT MAX(score_date) FROM hotspot_scores").fetchone()
+    score_date = latest_row[0] if latest_row and latest_row[0] else None
+    if not score_date:
         score_all_counties(state, con)
+        score_date = today
 
-    # Load scores into a dict keyed by FIPS
+    # Query hotspot_scores directly — no geographies JOIN so all scored counties appear
     rows = con.execute(
-        """SELECT hs.fips, hs.composite_score, hs.coverage_score,
-                  hs.surveillance_score, hs.network_score, hs.risk_tier,
-                  g.county_name, g.population
-           FROM hotspot_scores hs
-           JOIN geographies g ON hs.fips = g.fips
-           WHERE g.state_abbr = ? AND hs.score_date = ?""",
-        [state.upper(), today],
+        """SELECT fips, composite_score, coverage_score,
+                  surveillance_score, network_score, risk_tier
+           FROM hotspot_scores
+           WHERE score_date = ?""",
+        [score_date],
     ).fetchall()
 
     score_map = {
@@ -78,8 +73,6 @@ def get_scored_geojson(state: str):
             "surveillance_score": r[3],
             "network_score": r[4],
             "risk_tier": r[5],
-            "county_name": r[6],
-            "population": r[7],
             "has_score": True,
         }
         for r in rows
@@ -120,20 +113,17 @@ def get_district_geojson(state: str):
 
     con = get_connection()
 
-    # Pull latest county MMR coverage keyed by full 5-digit FIPS
+    # Pull latest county MMR coverage keyed by full 5-digit FIPS — no geographies JOIN
     county_cov = {
         r[0]: r[1]
         for r in con.execute(
-            """SELECT vc.fips, vc.mmr_coverage_pct
-               FROM vaccination_coverage vc
-               JOIN geographies g ON vc.fips = g.fips
-               WHERE g.state_abbr = ?
-                 AND vc.school_year = '2023-2024'""",
-            [state.upper()],
+            """SELECT fips, mmr_coverage_pct
+               FROM vaccination_coverage
+               WHERE school_year = '2023-2024'""",
         ).fetchall()
     }
 
-    # Pull county names
+    # Pull county names (LEFT JOIN so unmatched rows still surface via GeoJSON properties)
     county_names = {
         r[0]: r[1]
         for r in con.execute(
