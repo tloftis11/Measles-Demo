@@ -1,9 +1,9 @@
 """
 Natural language advisor endpoint.
 
-Accepts a question about Texas measles risk, interventions, or public health
-strategy. Claude uses the run_sql tool when specific data is needed, then
-synthesizes findings into a plain-English answer.
+Accepts any question about Texas measles risk, interventions, or public health
+strategy. Claude uses run_sql when specific data is needed; answers directly
+from expertise for conceptual or strategic questions.
 """
 from __future__ import annotations
 
@@ -42,59 +42,67 @@ DATABASE SCHEMA (Texas measles hotspot, school year 2023-2024):
   hotspot_scores(fips, score_date, coverage_score 0-100, surveillance_score 0-100,
                  network_score 0-100, composite_score 0-100,
                  risk_tier [LOW|MODERATE|HIGH|CRITICAL])
-
-  score_history(fips, week_start, composite_score, coverage_score,
-                surveillance_score, network_score, risk_tier)
+    -- Use MAX(score_date) to get the latest score per county.
+    -- Multiple rows per county: one per scoring date, so filter by date.
 
 Composite score = 0.40×coverage + 0.35×surveillance + 0.25×network
 Risk tiers: LOW 0-25 | MODERATE 25-50 | HIGH 50-75 | CRITICAL 75-100
 Herd immunity threshold for measles: 95% MMR coverage (R0 ≈ 12-18)
 254 TX counties total.
 
-KEY REGIONAL PATTERNS IN THE DATA:
-- Permian Basin cluster (west TX): Gaines, Andrews, Ward, Winkler counties — LOW MMR, trending upward in risk
-- Border counties (TX-Mexico): elevated cross-border exposure, high mobility
-- Urban cores (Harris, Travis, Dallas, Bexar): higher coverage but large absolute populations
+KEY PATTERNS:
+- West TX Permian Basin cluster: Gaines, Andrews, Ward, Winkler — low MMR, rising risk
+- Border counties (TX-Mexico): elevated cross-border exposure and mobility
+- Urban cores (Harris, Travis, Dallas, Bexar): higher coverage, large absolute populations
 """
 
-SYSTEM = f"""You are a senior CDC epidemiologist and public health advisor embedded with the Texas DSHS measles response team. You support outbreak prevention strategy, intervention planning, and data analysis.
+SYSTEM = f"""You are a senior CDC epidemiologist and public health advisor embedded with the Texas DSHS measles response team.
 
 {SCHEMA_DESCRIPTION}
 
-WHAT YOU CAN DO:
-1. QUERY & ANALYZE: Use run_sql to pull live data — risk scores, MMR coverage, case trends, network metrics — then interpret findings with epidemiological context.
-2. PRIORITIZE: Identify which counties, school districts, or regions need immediate attention and explain why.
-3. DESIGN INTERVENTIONS: Recommend specific, actionable campaigns — vaccination clinics, school outreach, exemption audits, community engagement — tailored to each county's risk profile.
-4. ASSESS TRAJECTORIES: Estimate outbreak potential from current data; explain how coverage gaps translate to susceptible populations and outbreak size.
-5. EXPLAIN CONCEPTS: Answer questions about measles epidemiology, SEIR models, herd immunity, wastewater surveillance, and public health strategy from expertise — no SQL needed for these.
+WHEN TO USE run_sql (use it for these):
+- Questions that require specific county names, numbers, rankings, or comparisons from the dataset
+- "Which counties...", "How many...", "What are the top...", "Compare X to Y"
+- Recommendations that must be grounded in actual risk scores or coverage data
 
-ANSWERING APPROACH:
-- For questions needing specific numbers: call run_sql first, then synthesize the data into your answer.
-- For intervention/strategy questions: query relevant counties or metrics, then give concrete, prioritized recommendations.
-- For conceptual or "what if" questions: draw on expertise; SQL is optional.
-- You may run multiple queries to build a complete picture before answering.
+WHEN TO ANSWER DIRECTLY — do NOT call run_sql for these:
+- Conceptual questions: what is herd immunity, how does SEIR work, what is R0, measles epidemiology
+- General intervention tactics: types of vaccination campaigns, how to approach exemption communities, outreach strategies
+- "What if" hypotheticals that don't require database numbers
+- Follow-up questions where you already have the data from this conversation
 
-FORMAT:
-- Use ALL CAPS section headers (e.g., PRIORITY COUNTIES, RECOMMENDED ACTIONS, RISK ASSESSMENT) for structured answers.
-- Name specific counties and cite actual numbers from the data.
-- For action plans: state which counties, which intervention type, and the rationale.
-- Responses can be as detailed as the question requires — don't truncate complex analyses."""
+FOR QUESTIONS THAT NEED BOTH DATA AND STRATEGY:
+- Run one focused query to get the key numbers, then give the full strategic answer.
+- Prefer a single well-constructed query over multiple back-and-forth queries.
+
+EXAMPLE SQL PATTERN for latest scores:
+  SELECT g.county_name, vc.mmr_coverage_pct, hs.composite_score, hs.risk_tier
+  FROM hotspot_scores hs
+  JOIN geographies g ON hs.fips = g.fips
+  JOIN vaccination_coverage vc ON hs.fips = vc.fips AND vc.school_year = '2023-2024'
+  WHERE hs.score_date = (SELECT MAX(score_date) FROM hotspot_scores WHERE fips = hs.fips)
+  ORDER BY hs.composite_score DESC LIMIT 10;
+
+FORMAT YOUR ANSWERS:
+- Use ALL CAPS section headers (PRIORITY COUNTIES, RECOMMENDED ACTIONS, RISK ASSESSMENT)
+- Name specific counties with actual numbers from queries
+- For action plans: county → intervention type → rationale → expected impact
+- Be as thorough as the question requires"""
 
 TOOLS = [
     {
         "name": "run_sql",
         "description": (
             "Execute a read-only SQL SELECT query against the measles hotspot DuckDB. "
-            "Returns results as JSON. Use this to get specific county data, rankings, "
-            "coverage rates, scores, trends, or any other quantitative information needed "
-            "to ground your answer in the actual data."
+            "Returns results as JSON rows. Use this only when the answer requires specific "
+            "numbers, county names, rankings, or data comparisons from the live dataset."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "sql": {
                     "type": "string",
-                    "description": "A valid DuckDB SQL SELECT statement. JOINs, CTEs, and aggregations are supported. No INSERT/UPDATE/DELETE.",
+                    "description": "A valid DuckDB SQL SELECT statement. JOINs and CTEs are supported. No INSERT/UPDATE/DELETE.",
                 },
                 "description": {
                     "type": "string",
@@ -134,55 +142,47 @@ def _stream_query(
     client = anthropic.Anthropic(api_key=api_key)
     messages = list(history) + [{"role": "user", "content": question}]
 
-    # Agentic loop — Claude may call run_sql one or more times
     loop_count = 0
-    while loop_count < 6:  # safety cap
+    while loop_count < 5:
         loop_count += 1
 
-        # Keepalive comment between iterations so proxies don't close the connection
         if loop_count > 1:
             yield ": keepalive\n\n"
 
-        with client.messages.stream(
-            model=MODEL,
-            max_tokens=3000,
-            system=SYSTEM,
-            tools=TOOLS,
-            messages=messages,
-            thinking={"type": "adaptive"},
-        ) as stream:
-            tool_uses: list[dict] = []
+        try:
+            with client.messages.stream(
+                model=MODEL,
+                max_tokens=3000,
+                system=SYSTEM,
+                tools=TOOLS,
+                messages=messages,
+                # No extended thinking — it causes signature serialization failures
+                # in multi-turn tool-use loops when thinking blocks are included in history
+            ) as stream:
+                for event in stream:
+                    if not hasattr(event, "type"):
+                        continue
+                    if event.type == "content_block_delta":
+                        delta = event.delta
+                        if getattr(delta, "type", None) == "text_delta" and delta.text:
+                            yield f"data: {json.dumps({'type': 'text', 'delta': delta.text})}\n\n"
 
-            for event in stream:
-                if not hasattr(event, "type"):
-                    continue
-                if event.type == "content_block_start":
-                    if (
-                        hasattr(event, "content_block")
-                        and getattr(event.content_block, "type", None) == "tool_use"
-                    ):
-                        tool_uses.append({
-                            "id": event.content_block.id,
-                            "name": event.content_block.name,
-                        })
-                elif event.type == "content_block_delta":
-                    delta = event.delta
-                    if getattr(delta, "type", None) == "text_delta" and delta.text:
-                        yield f"data: {json.dumps({'type': 'text', 'delta': delta.text})}\n\n"
+                final = stream.get_final_message()
 
-            final = stream.get_final_message()
+        except anthropic.APIError as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'API error: {exc.message}'})}\n\n"
+            return
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+            return
 
-        stop_reason = final.stop_reason
-
-        if stop_reason != "tool_use":
+        if final.stop_reason != "tool_use":
             break
 
-        # Build assistant content block (include thinking blocks for context continuity)
+        # Serialize assistant turn — only text and tool_use blocks (no thinking blocks)
         assistant_content = []
         for block in final.content:
-            if block.type == "thinking":
-                assistant_content.append({"type": "thinking", "thinking": block.thinking})
-            elif block.type == "text":
+            if block.type == "text":
                 assistant_content.append({"type": "text", "text": block.text})
             elif block.type == "tool_use":
                 assistant_content.append({
@@ -198,15 +198,17 @@ def _stream_query(
         for block in final.content:
             if block.type != "tool_use":
                 continue
+
             sql = block.input.get("sql", "")
             desc = block.input.get("description", sql[:80])
             yield f"data: {json.dumps({'type': 'tool_call', 'description': desc})}\n\n"
 
             try:
                 rows = _run_sql(sql, con)
-                result_text = json.dumps(rows[:100])
                 if len(rows) > 100:
-                    result_text += f"\n[...{len(rows) - 100} more rows omitted]"
+                    result_text = json.dumps(rows[:100]) + f"\n[...{len(rows) - 100} more rows omitted]"
+                else:
+                    result_text = json.dumps(rows)
             except Exception as exc:
                 result_text = json.dumps({"error": str(exc)})
 
