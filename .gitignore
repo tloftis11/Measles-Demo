@@ -15,8 +15,7 @@ backend/.env
 frontend/node_modules/
 frontend/dist/
 
-# DuckDB runtime files
-*.duckdb
+# DuckDB WAL (transient, auto-cleaned)
 *.duckdb.wal
 
 # OS
