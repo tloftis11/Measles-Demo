@@ -78,7 +78,12 @@ const SAMPLE_QUESTIONS = [
   "How should we communicate risk to parents in exemption-heavy communities?",
 ];
 
-export function QueryPanel() {
+interface Props {
+  state?: string;
+  stateName?: string;
+}
+
+export function QueryPanel({ state: _state, stateName: _stateName }: Props = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState("");
   const [busy, setBusy]         = useState(false);

@@ -12,6 +12,7 @@ import type { ScoreBreakdown } from "./types";
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 type Tab = "map" | "simulate" | "query" | "methodology" | "news";
+type StateAbbr = "tx" | "id" | "pa";
 
 const TIER_COLOR: Record<string, string> = {
   CRITICAL: "#C22828",
@@ -28,21 +29,33 @@ const TAB_LABELS: Record<Tab, string> = {
   news:        "News",
 };
 
+const STATE_LABELS: Record<StateAbbr, string> = {
+  tx: "Texas",
+  id: "Idaho",
+  pa: "Pennsylvania",
+};
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("map");
+  const [selectedState, setSelectedState] = useState<StateAbbr>("tx");
   const [selectedFips, setSelectedFips] = useState<string | null>(null);
 
   const { data: breakdown, isLoading: breakdownLoading } = useQuery({
-    queryKey: ["breakdown", "tx", selectedFips],
-    queryFn: () => api.countyBreakdown("tx", selectedFips!),
+    queryKey: ["breakdown", selectedState, selectedFips],
+    queryFn: () => api.countyBreakdown(selectedState, selectedFips!),
     enabled: !!selectedFips,
   });
 
   const { data: scores } = useQuery({
-    queryKey: ["scores", "tx"],
-    queryFn:  () => api.stateScores("tx"),
+    queryKey: ["scores", selectedState],
+    queryFn:  () => api.stateScores(selectedState),
     staleTime: 10 * 60 * 1000,
   });
+
+  const handleStateChange = (s: StateAbbr) => {
+    setSelectedState(s);
+    setSelectedFips(null);
+  };
 
   return (
     <div style={{
@@ -85,9 +98,43 @@ export default function App() {
           ))}
         </nav>
 
+        {/* State selector */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          marginLeft: 8,
+          background: "rgba(255,255,255,0.07)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 6, padding: "0 4px", height: 32,
+        }}>
+          {(["tx", "id", "pa"] as StateAbbr[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => handleStateChange(s)}
+              title={STATE_LABELS[s]}
+              style={{
+                background: selectedState === s ? "#E8700A" : "transparent",
+                color: selectedState === s ? "#fff" : "#7A99B8",
+                border: "none",
+                borderRadius: 4,
+                padding: "0 10px",
+                height: 24,
+                fontSize: 11,
+                fontWeight: 700,
+                fontFamily: "'Trebuchet MS', Arial, sans-serif",
+                letterSpacing: "0.08em",
+                cursor: "pointer",
+                textTransform: "uppercase",
+                transition: "all 0.12s",
+              }}
+            >
+              {s.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
         <div style={{ marginLeft: "auto" }}>
           <a
-            href={`${API_BASE}/api/scores/tx/export/csv`}
+            href={`${API_BASE}/api/scores/${selectedState}/export/csv`}
             download
             style={{
               fontSize: 11, fontWeight: 700, color: "#E8700A",
@@ -112,6 +159,7 @@ export default function App() {
           {/* Left: map + legend overlay */}
           <div style={{ flex: "0 0 60%", position: "relative", overflow: "hidden" }}>
             <HotspotMap
+              state={selectedState}
               onSelect={(fips) => { setSelectedFips(fips); setTab("map"); }}
               selectedFips={selectedFips}
             />
@@ -158,12 +206,12 @@ export default function App() {
         {tab === "simulate" && (
           <SimPanel
             counties={scores ?? []}
-            initialFips={selectedFips ?? "48169"}
+            initialFips={selectedFips ?? (selectedState === "tx" ? "48169" : selectedState === "id" ? "16001" : "42003")}
           />
         )}
 
         {/* QUERY TAB */}
-        {tab === "query" && <QueryPanel />}
+        {tab === "query" && <QueryPanel state={selectedState} stateName={STATE_LABELS[selectedState]} />}
 
         {/* METHODOLOGY TAB */}
         {tab === "methodology" && <MethodologyPanel />}

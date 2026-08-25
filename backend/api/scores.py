@@ -16,9 +16,21 @@ router = APIRouter(prefix="/api/scores", tags=["scores"])
 def get_state_scores(state: str):
     """Return current hotspot scores for every county in a state."""
     con = get_connection()
-
-    # Check if we have today's scores already; if not, compute them
     today = date.today().isoformat()
+
+    # Use the latest available score date; compute today's only if nothing exists
+    latest_row = con.execute(
+        """SELECT MAX(hs.score_date) FROM hotspot_scores hs
+           JOIN geographies g ON hs.fips = g.fips
+           WHERE g.state_abbr = ?""",
+        [state.upper()],
+    ).fetchone()
+    score_date = latest_row[0] if latest_row and latest_row[0] else None
+
+    if not score_date:
+        score_all_counties(state, con)
+        score_date = today
+
     cached = con.execute(
         """
         SELECT hs.fips, g.county_name, g.full_name, g.population,
@@ -29,23 +41,8 @@ def get_state_scores(state: str):
         WHERE g.state_abbr = ? AND hs.score_date = ?
         ORDER BY hs.composite_score DESC
         """,
-        [state.upper(), today],
+        [state.upper(), score_date],
     ).fetchall()
-
-    if not cached:
-        score_all_counties(state, con)
-        cached = con.execute(
-            """
-            SELECT hs.fips, g.county_name, g.full_name, g.population,
-                   hs.coverage_score, hs.surveillance_score, hs.network_score,
-                   hs.composite_score, hs.risk_tier
-            FROM hotspot_scores hs
-            JOIN geographies g ON hs.fips = g.fips
-            WHERE g.state_abbr = ? AND hs.score_date = ?
-            ORDER BY hs.composite_score DESC
-            """,
-            [state.upper(), today],
-        ).fetchall()
 
     if not cached:
         raise HTTPException(status_code=404, detail=f"No data for state: {state}")

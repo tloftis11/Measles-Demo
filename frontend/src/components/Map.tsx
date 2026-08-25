@@ -15,6 +15,12 @@ const NO_DATA_STYLE: L.PathOptions = {
   color: "#b0bec5", weight: 0.5, fillColor: "#eceff1", fillOpacity: 0.45,
 };
 
+const STATE_VIEW: Record<string, { center: [number, number]; zoom: number }> = {
+  tx: { center: [31.5, -99.5],  zoom: 6   },
+  id: { center: [44.5, -114.5], zoom: 6   },
+  pa: { center: [40.9, -77.8],  zoom: 7   },
+};
+
 function tierStyle(tier: string | null, thin = false): L.PathOptions {
   if (!tier || !TIER_COLOR[tier]) return NO_DATA_STYLE;
   return {
@@ -28,11 +34,12 @@ function tierStyle(tier: string | null, thin = false): L.PathOptions {
 type ViewMode = "county" | "district";
 
 interface Props {
+  state: string;
   onSelect: (fips: string) => void;
   selectedFips: string | null;
 }
 
-export function HotspotMap({ onSelect, selectedFips }: Props) {
+export function HotspotMap({ state, onSelect, selectedFips }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef        = useRef<L.Map | null>(null);
   const layerRef      = useRef<L.GeoJSON | null>(null);
@@ -47,9 +54,10 @@ export function HotspotMap({ onSelect, selectedFips }: Props) {
   // Init map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    const { center, zoom } = STATE_VIEW[state] ?? STATE_VIEW.tx;
     mapRef.current = L.map(containerRef.current, {
-      center: [31.5, -99.5],
-      zoom: 6,
+      center,
+      zoom,
       zoomSnap: 0.5,
     });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -61,9 +69,19 @@ export function HotspotMap({ onSelect, selectedFips }: Props) {
       mapRef.current?.remove();
       mapRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load/reload the GeoJSON layer whenever viewMode changes
+  // Re-center and reload when state changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const { center, zoom } = STATE_VIEW[state] ?? STATE_VIEW.tx;
+    mapRef.current.setView(center, zoom);
+    selectedRef.current = null;
+    setViewMode("county");
+  }, [state]);
+
+  // Load/reload the GeoJSON layer whenever viewMode or state changes
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -74,9 +92,10 @@ export function HotspotMap({ onSelect, selectedFips }: Props) {
     }
 
     const isDistrict = viewMode === "district";
-    const url = isDistrict
-      ? `${BASE}/api/geojson/tx/districts`
-      : `${BASE}/api/geojson/tx/counties`;
+    // Districts only available for TX currently; other states fall back to counties
+    const url = (isDistrict && state === "tx")
+      ? `${BASE}/api/geojson/${state}/districts`
+      : `${BASE}/api/geojson/${state}/counties`;
 
     setLoading(true);
 
@@ -132,7 +151,7 @@ export function HotspotMap({ onSelect, selectedFips }: Props) {
         setLoading(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode]);
+  }, [viewMode, state]);
 
   function applyHighlight(fips: string | null) {
     const layer = layerRef.current;
@@ -157,39 +176,44 @@ export function HotspotMap({ onSelect, selectedFips }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFips]);
 
+  // District view toggle: only show for TX (districts not yet available for ID/PA)
+  const showDistrictToggle = state === "tx";
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
       {/* View toggle — top left overlay */}
-      <div style={{
-        position: "absolute", top: 12, left: 12, zIndex: 1000,
-        background: "#fff", borderRadius: 8,
-        boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
-        overflow: "hidden", display: "flex",
-        fontFamily: "'Trebuchet MS', Arial, sans-serif",
-      }}>
-        {(["county", "district"] as ViewMode[]).map((mode) => (
-          <button
-            key={mode}
-            onClick={() => setViewMode(mode)}
-            style={{
-              padding: "7px 14px",
-              fontSize: 11, fontWeight: 700,
-              fontFamily: "'Trebuchet MS', Arial, sans-serif",
-              letterSpacing: "0.05em",
-              background: viewMode === mode ? "#1A2744" : "#fff",
-              color: viewMode === mode ? "#fff" : "#4A5E78",
-              border: "none",
-              cursor: viewMode === mode ? "default" : "pointer",
-              borderRight: mode === "county" ? "1px solid #e0e8f4" : "none",
-              transition: "background 0.12s, color 0.12s",
-            }}
-          >
-            {mode === "county" ? "Counties" : "School Districts"}
-          </button>
-        ))}
-      </div>
+      {showDistrictToggle && (
+        <div style={{
+          position: "absolute", top: 12, left: 12, zIndex: 1000,
+          background: "#fff", borderRadius: 8,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+          overflow: "hidden", display: "flex",
+          fontFamily: "'Trebuchet MS', Arial, sans-serif",
+        }}>
+          {(["county", "district"] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              style={{
+                padding: "7px 14px",
+                fontSize: 11, fontWeight: 700,
+                fontFamily: "'Trebuchet MS', Arial, sans-serif",
+                letterSpacing: "0.05em",
+                background: viewMode === mode ? "#1A2744" : "#fff",
+                color: viewMode === mode ? "#fff" : "#4A5E78",
+                border: "none",
+                cursor: viewMode === mode ? "default" : "pointer",
+                borderRight: mode === "county" ? "1px solid #e0e8f4" : "none",
+                transition: "background 0.12s, color 0.12s",
+              }}
+            >
+              {mode === "county" ? "Counties" : "School Districts"}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Loading indicator */}
       {loading && (

@@ -13,7 +13,11 @@ router = APIRouter(prefix="/api/geojson", tags=["geojson"])
 
 GEOJSON_DIR = Path(__file__).parent.parent.parent / "data" / "geojson"
 
-STATE_FILES = {"tx": "tx_counties.geojson"}
+STATE_FILES = {
+    "tx": "tx_counties.geojson",
+    "id": "id_counties.geojson",
+    "pa": "pa_counties.geojson",
+}
 
 
 def _district_tier(mmr: float) -> str:
