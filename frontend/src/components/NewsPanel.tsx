@@ -128,7 +128,9 @@ function SourcesList({ sources }: { sources: string[] }) {
   );
 }
 
-export function NewsPanel() {
+const STATE_LABELS: Record<string, string> = { tx: "Texas", id: "Idaho", pa: "Pennsylvania" };
+
+export function NewsPanel({ state = "tx" }: { state?: string }) {
   const [status, setStatus] = useState<Status>("loading");
   const [text, setText] = useState("");
   const [sources, setSources] = useState<string[]>([]);
@@ -136,13 +138,13 @@ export function NewsPanel() {
   const [errorMsg, setErrorMsg] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
-  const startRefresh = useCallback(async (signal: AbortSignal) => {
+  const startRefresh = useCallback(async (currentState: string, signal: AbortSignal) => {
     setText("");
     setSources([]);
     setErrorMsg("");
     setStatus("streaming");
     try {
-      const resp = await fetch(`${BASE}/api/news/refresh`, { method: "POST", signal });
+      const resp = await fetch(`${BASE}/api/news/refresh?state=${currentState}`, { method: "POST", signal });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const reader = resp.body!.getReader();
@@ -188,8 +190,12 @@ export function NewsPanel() {
   useEffect(() => {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    setText("");
+    setSources([]);
+    setFetchedAt(null);
+    setStatus("loading");
 
-    api.getNews().then((cached: NewsBriefing) => {
+    api.getNews(state).then((cached: NewsBriefing) => {
       if (ctrl.signal.aborted) return;
       if (cached.is_fresh && cached.briefing) {
         setText(cached.briefing);
@@ -197,20 +203,20 @@ export function NewsPanel() {
         setFetchedAt(cached.fetched_at);
         setStatus("done");
       } else {
-        startRefresh(ctrl.signal);
+        startRefresh(state, ctrl.signal);
       }
     }).catch(() => {
-      if (!ctrl.signal.aborted) startRefresh(ctrl.signal);
+      if (!ctrl.signal.aborted) startRefresh(state, ctrl.signal);
     });
 
     return () => ctrl.abort();
-  }, [startRefresh]);
+  }, [state, startRefresh]);
 
   const handleRefresh = () => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    startRefresh(ctrl.signal);
+    startRefresh(state, ctrl.signal);
   };
 
   const isStreaming = status === "streaming";
@@ -231,7 +237,7 @@ export function NewsPanel() {
             fontSize: 14, fontWeight: 700, color: "#1A2744",
             fontFamily: "'Trebuchet MS', Arial, sans-serif", letterSpacing: "0.03em",
           }}>
-            Measles Intelligence Briefing
+            {STATE_LABELS[state] ?? state.toUpperCase()} Measles Intelligence Briefing
           </div>
           <div style={{
             fontSize: 11, color: "#7A92AB", marginTop: 2,
@@ -241,7 +247,7 @@ export function NewsPanel() {
             {isStreaming ? (
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ color: "#E8700A", fontWeight: 700 }}>Live</span>
-                — fetching latest measles intelligence via web search
+                — fetching {STATE_LABELS[state] ?? state.toUpperCase()} measles intelligence via web search
               </span>
             ) : status === "loading" ? (
               "Checking cache…"

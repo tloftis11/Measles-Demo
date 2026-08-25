@@ -217,7 +217,7 @@ export default function App() {
         {tab === "methodology" && <MethodologyPanel />}
 
         {/* NEWS TAB */}
-        {tab === "news" && <NewsPanel />}
+        {tab === "news" && <NewsPanel state={selectedState} />}
       </div>
     </div>
   );

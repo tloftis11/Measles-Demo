@@ -152,10 +152,11 @@ def get_district_geojson(state: str):
 
         county_mmr = county_cov.get(fips)
         if county_mmr is None:
-            # Try building fips from county_fips field
+            # Try building fips from county_fips + state_fips fields
             cfips = props.get("county_fips", "")
-            if cfips:
-                fips = "48" + str(cfips).zfill(3)
+            state_f = props.get("state_fips", "")
+            if cfips and state_f:
+                fips = state_f.zfill(2) + str(cfips).zfill(3)
                 county_mmr = county_cov.get(fips)
 
         if county_mmr is not None:

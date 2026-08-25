@@ -28,5 +28,5 @@ export const api = {
   countyHistory: (state: string, fips: string) =>
     get<ScoreHistoryPoint[]>(`/api/districts/${state}/${fips}/history`),
 
-  getNews: () => get<NewsBriefing>("/api/news"),
+  getNews: (state: string) => get<NewsBriefing>(`/api/news?state=${state}`),
 };

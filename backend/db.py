@@ -106,11 +106,19 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("""
         CREATE TABLE IF NOT EXISTS news_cache (
             id           INTEGER PRIMARY KEY,
+            state_abbr   TEXT DEFAULT 'tx',
             fetched_at   TEXT NOT NULL,
             briefing     TEXT NOT NULL,
             sources_json TEXT DEFAULT '[]'
         )
     """)
+    # Migrate existing news_cache tables that predate state_abbr column
+    try:
+        existing_cols = {row[0] for row in con.execute("DESCRIBE news_cache").fetchall()}
+        if 'state_abbr' not in existing_cols:
+            con.execute("ALTER TABLE news_cache ADD COLUMN state_abbr TEXT DEFAULT 'tx'")
+    except Exception:
+        pass
 
     # Seed each state independently so adding a new state never requires wiping the DB
     def _state_missing(abbr: str) -> bool:

@@ -1,8 +1,8 @@
 """
 News intelligence briefing endpoints.
 
-GET  /api/news         — returns cached briefing + freshness flag
-POST /api/news/refresh — streams a fresh briefing (SSE), caches when complete
+GET  /api/news?state=tx         — returns cached briefing + freshness flag
+POST /api/news/refresh?state=tx — streams a fresh briefing (SSE), caches when complete
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from db import get_connection
@@ -20,11 +20,20 @@ router = APIRouter(prefix="/api/news", tags=["news"])
 
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
+# Map state abbreviation to a stable integer id for the news_cache PRIMARY KEY
+_STATE_IDS: dict[str, int] = {"tx": 1, "id": 2, "pa": 3}
 
-def _get_cached(con) -> dict | None:
-    """Return cached briefing dict or None if no cache exists."""
+
+def _state_id(state: str) -> int:
+    return _STATE_IDS.get(state.lower(), 1)
+
+
+def _get_cached(con, state: str) -> dict | None:
+    """Return cached briefing dict for a state, or None if no cache exists."""
+    sid = _state_id(state)
     row = con.execute(
-        "SELECT fetched_at, briefing, sources_json FROM news_cache WHERE id = 1"
+        "SELECT fetched_at, briefing, sources_json FROM news_cache WHERE id = ?",
+        [sid],
     ).fetchone()
     if not row:
         return None
@@ -39,21 +48,22 @@ def _is_fresh(fetched_at_str: str) -> bool:
     return age < CACHE_TTL_HOURS
 
 
-def _save_cache(con, fetched_at: str, briefing: str, sources: list[str]) -> None:
+def _save_cache(con, state: str, fetched_at: str, briefing: str, sources: list[str]) -> None:
+    sid = _state_id(state)
     con.execute(
         """
-        INSERT OR REPLACE INTO news_cache (id, fetched_at, briefing, sources_json)
-        VALUES (1, ?, ?, ?)
+        INSERT OR REPLACE INTO news_cache (id, state_abbr, fetched_at, briefing, sources_json)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        [fetched_at, briefing, json.dumps(sources)],
+        [sid, state.lower(), fetched_at, briefing, json.dumps(sources)],
     )
 
 
 @router.get("")
-def get_news():
-    """Return cached briefing. is_fresh=False means the caller should trigger a refresh."""
+def get_news(state: str = Query(default="tx")):
+    """Return cached briefing for a state. is_fresh=False means the caller should trigger a refresh."""
     con = get_connection()
-    cached = _get_cached(con)
+    cached = _get_cached(con, state)
     if not cached:
         return {"is_fresh": False, "fetched_at": None, "briefing": None, "sources": []}
     return {
@@ -65,12 +75,12 @@ def get_news():
 
 
 @router.post("/refresh")
-def refresh_news():
-    """Stream a fresh intelligence briefing, then cache the result."""
+def refresh_news(state: str = Query(default="tx")):
+    """Stream a fresh intelligence briefing for a state, then cache the result."""
     con = get_connection()
 
     def generate():
-        for event in stream_news_briefing():
+        for event in stream_news_briefing(state):
             yield event
             # Intercept the 'done' event to save to cache
             if event.startswith("data: ") and not event.startswith("data: [DONE]"):
@@ -80,6 +90,7 @@ def refresh_news():
                     if parsed.get("type") == "done":
                         _save_cache(
                             con,
+                            state,
                             parsed["fetched_at"],
                             parsed["briefing"],
                             parsed.get("sources", []),

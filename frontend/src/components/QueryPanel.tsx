@@ -65,25 +65,52 @@ function MessageText({ text, streaming }: { text: string; streaming: boolean }) 
   );
 }
 
-const SAMPLE_QUESTIONS = [
-  "Which counties should we prioritize for vaccination outreach this month?",
-  "Design an intervention plan for the Permian Basin cluster",
-  "How do we approach vaccine-hesitant communities with high religious exemption rates?",
-  "How many children are unprotected in HIGH and CRITICAL counties?",
-  "What does the wastewater signal actually tell us, and what are its limitations?",
-  "Compare risk profiles of our top 10 most at-risk counties",
-  "Which border counties need immediate attention and why?",
-  "Explain how measles achieves outbreak conditions — what has to go wrong?",
-  "What early warning signs preceded the Gaines County 2025 outbreak?",
-  "How should we communicate risk to parents in exemption-heavy communities?",
-];
+const SAMPLE_QUESTIONS: Record<string, string[]> = {
+  tx: [
+    "Which counties should we prioritize for vaccination outreach this month?",
+    "Design an intervention plan for the Permian Basin cluster",
+    "How do we approach vaccine-hesitant communities with high religious exemption rates?",
+    "How many children are unprotected in HIGH and CRITICAL counties?",
+    "What does the wastewater signal actually tell us, and what are its limitations?",
+    "Compare risk profiles of our top 10 most at-risk counties",
+    "Which border counties need immediate attention and why?",
+    "Explain how measles achieves outbreak conditions — what has to go wrong?",
+    "What early warning signs preceded the Gaines County 2025 outbreak?",
+    "How should we communicate risk to parents in exemption-heavy communities?",
+  ],
+  id: [
+    "Which Idaho counties have the highest non-medical exemption rates and what does that mean?",
+    "Design an outreach plan for Blaine County's high-exemption community",
+    "How does Idaho's philosophical exemption policy compare to neighboring states?",
+    "How many Idaho children are unprotected in HIGH and CRITICAL counties?",
+    "What importation risk do Bonner and Boundary counties face from Canada?",
+    "Compare risk profiles of Idaho's top 10 most at-risk counties",
+    "Explain what makes Blaine and Teton counties particularly high-risk",
+    "How should we approach vaccine-hesitant families in rural Idaho communities?",
+    "What would a measles outbreak in a rural Idaho county actually look like?",
+    "How should public health communicate risk without increasing vaccine resistance?",
+  ],
+  pa: [
+    "Which Pennsylvania counties are at highest risk and why?",
+    "Design an intervention plan for the central PA Amish belt",
+    "How should we approach outreach in Lancaster County's Amish community?",
+    "How many unvaccinated children live in HIGH and CRITICAL Pennsylvania counties?",
+    "What's the relationship between religious exemptions and outbreak risk in PA?",
+    "Compare risk profiles of Pennsylvania's top 10 most at-risk counties",
+    "What early warning signs should we watch for in Lancaster County?",
+    "How do we communicate risk without stigmatizing religious communities?",
+    "What makes the Mifflin-Juniata-Snyder cluster uniquely dangerous?",
+    "Explain the epidemiological risk of a measles outbreak in an Amish community.",
+  ],
+};
 
 interface Props {
   state?: string;
   stateName?: string;
 }
 
-export function QueryPanel({ state: _state, stateName: _stateName }: Props = {}) {
+export function QueryPanel({ state = "tx", stateName }: Props = {}) {
+  const questions = SAMPLE_QUESTIONS[state] ?? SAMPLE_QUESTIONS.tx;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState("");
   const [busy, setBusy]         = useState(false);
@@ -121,7 +148,7 @@ export function QueryPanel({ state: _state, stateName: _stateName }: Props = {})
       const resp = await fetch(`${BASE}/api/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, history }),
+        body: JSON.stringify({ question: q, history, state }),
         signal: abortRef.current.signal,
       });
 
@@ -211,7 +238,7 @@ export function QueryPanel({ state: _state, stateName: _stateName }: Props = {})
           AI Advisor
         </div>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2744" }}>
-          Ask anything about measles, public health response, or the Texas data
+          Ask anything about measles, public health response, or the {stateName ?? "state"} data
         </div>
         <div style={{ fontSize: 11, color: "#7A92AB", marginTop: 2 }}>
           Outbreak analysis · Intervention planning · Epidemiology · Policy · Community engagement
@@ -226,7 +253,7 @@ export function QueryPanel({ state: _state, stateName: _stateName }: Props = {})
               Ask about the data, measles biology, outbreak history, intervention design, or communication strategy — or try a sample:
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {SAMPLE_QUESTIONS.map((q) => (
+              {questions.map((q) => (
                 <button
                   key={q}
                   onClick={() => send(q)}
