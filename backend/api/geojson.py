@@ -231,6 +231,8 @@ def get_district_geojson(state: str):
                 "has_score": True,
                 "mmr_coverage_pct": mmr,
                 "coverage_score": round(cov_s, 1),
+                "surveillance_score": round(surv_s, 1),
+                "network_score": round(net_s, 1),
                 "composite_score": composite,
                 "risk_tier": tier,
                 "county_name": county_names.get(fips, ""),

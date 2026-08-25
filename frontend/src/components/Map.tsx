@@ -37,10 +37,13 @@ export interface DistrictMapProps {
   lea_geoid: string;
   district_name: string;
   county_name: string;
-  county_fips: string;   // 5-digit county fips
+  county_fips: string;
   mmr_coverage_pct: number;
-  risk_tier: string;
+  composite_score: number;
   coverage_score: number;
+  surveillance_score: number;
+  network_score: number;
+  risk_tier: string;
 }
 
 interface Props {
@@ -137,13 +140,16 @@ export function HotspotMap({ state, onSelect, onSelectDistrict, selectedFips }: 
                 if (!fips) return;
                 if (isDistrict && onSelectDistrict) {
                   onSelectDistrict({
-                    lea_geoid:        String(p.lea_geoid ?? ""),
-                    district_name:    String(p.district_name ?? ""),
-                    county_name:      String(p.county_name ?? ""),
-                    county_fips:      fips,
-                    mmr_coverage_pct: Number(p.mmr_coverage_pct ?? 0),
-                    risk_tier:        String(p.risk_tier ?? ""),
-                    coverage_score:   Number(p.coverage_score ?? 0),
+                    lea_geoid:          String(p.lea_geoid ?? ""),
+                    district_name:      String(p.district_name ?? ""),
+                    county_name:        String(p.county_name ?? ""),
+                    county_fips:        fips,
+                    mmr_coverage_pct:   Number(p.mmr_coverage_pct ?? 0),
+                    composite_score:    Number(p.composite_score ?? 0),
+                    coverage_score:     Number(p.coverage_score ?? 0),
+                    surveillance_score: Number(p.surveillance_score ?? 0),
+                    network_score:      Number(p.network_score ?? 0),
+                    risk_tier:          String(p.risk_tier ?? ""),
                   });
                 } else {
                   onSelect(fips);

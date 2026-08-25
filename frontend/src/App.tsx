@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import { HotspotMap } from "./components/Map";
@@ -8,7 +8,7 @@ import { SimPanel } from "./components/SimPanel";
 import { QueryPanel } from "./components/QueryPanel";
 import { MethodologyPanel } from "./components/MethodologyPanel";
 import { NewsPanel } from "./components/NewsPanel";
-import type { ScoreBreakdown, SchoolDistrict } from "./types";
+import type { ScoreBreakdown } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -40,7 +40,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("map");
   const [selectedState, setSelectedState] = useState<StateAbbr>("tx");
   const [selectedFips, setSelectedFips] = useState<string | null>(null);
-  const [pendingDistrictLeaId, setPendingDistrictLeaId] = useState<string | null>(null);
+  // District selected by clicking on the map — stores GeoJSON props directly,
+  // no async lookup needed (avoids race conditions with county breakdown query)
+  const [selectedMapDistrict, setSelectedMapDistrict] = useState<DistrictMapProps | null>(null);
 
   const { data: breakdown, isLoading: breakdownLoading } = useQuery({
     queryKey: ["breakdown", selectedState, selectedFips],
@@ -54,32 +56,16 @@ export default function App() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // Fetch district list when user clicks a district on the map
-  const { data: countyDistricts } = useQuery({
-    queryKey: ["countyDistricts", selectedState, selectedFips, pendingDistrictLeaId],
-    queryFn: () => api.countyDistricts(selectedState, selectedFips!),
-    enabled: !!selectedFips && !!pendingDistrictLeaId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Find the matching SchoolDistrict for the map-clicked district
-  const autoSelectedDistrict = useMemo((): SchoolDistrict | null => {
-    if (!pendingDistrictLeaId || !countyDistricts) return null;
-    return countyDistricts.districts.find(
-      (d) => d.lea_id === pendingDistrictLeaId
-    ) ?? null;
-  }, [pendingDistrictLeaId, countyDistricts]);
-
   const handleSelectDistrict = (district: DistrictMapProps) => {
-    setSelectedFips(district.county_fips);
-    setPendingDistrictLeaId(district.lea_geoid);
+    setSelectedMapDistrict(district);
+    setSelectedFips(district.county_fips);  // loads county breakdown for context
     setTab("map");
   };
 
   const handleStateChange = (s: StateAbbr) => {
     setSelectedState(s);
     setSelectedFips(null);
-    setPendingDistrictLeaId(null);
+    setSelectedMapDistrict(null);
   };
 
   return (
@@ -185,7 +171,7 @@ export default function App() {
           <div style={{ flex: "0 0 60%", position: "relative", overflow: "hidden" }}>
             <HotspotMap
               state={selectedState}
-              onSelect={(fips) => { setSelectedFips(fips); setPendingDistrictLeaId(null); setTab("map"); }}
+              onSelect={(fips) => { setSelectedFips(fips); setSelectedMapDistrict(null); setTab("map"); }}
               onSelectDistrict={handleSelectDistrict}
               selectedFips={selectedFips}
             />
@@ -224,7 +210,8 @@ export default function App() {
               breakdown={breakdown as ScoreBreakdown | undefined}
               isLoading={breakdownLoading && !!selectedFips}
               onSimulate={() => setTab("simulate")}
-              initialDistrict={autoSelectedDistrict}
+              mapDistrict={selectedMapDistrict}
+              onClearMapDistrict={() => setSelectedMapDistrict(null)}
             />
           </div>
         </div>

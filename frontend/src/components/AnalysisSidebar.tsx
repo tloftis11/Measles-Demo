@@ -3,6 +3,7 @@ import {
   LineChart, Line, ResponsiveContainer, Tooltip, ReferenceLine,
 } from "recharts";
 import type { ScoreBreakdown, SchoolDistrict, ScoreHistoryPoint } from "../types";
+import type { DistrictMapProps } from "./Map";
 import { api } from "../api";
 import { AIAnalyst } from "./AIAnalyst";
 
@@ -313,26 +314,25 @@ interface Props {
   breakdown: ScoreBreakdown | undefined;
   isLoading?: boolean;
   onSimulate?: () => void;
-  initialDistrict?: SchoolDistrict | null;
+  /** District selected by clicking on the map polygon — synchronous, no async fetch */
+  mapDistrict?: DistrictMapProps | null;
+  onClearMapDistrict?: () => void;
 }
 
-export function AnalysisSidebar({ breakdown, isLoading, onSimulate, initialDistrict }: Props) {
+export function AnalysisSidebar({ breakdown, isLoading, onSimulate, mapDistrict, onClearMapDistrict }: Props) {
   const [activeTab, setActiveTab]             = useState<SidebarTab>("data");
   const [selectedDistrict, setSelectedDistrict] = useState<SchoolDistrict | null>(null);
 
-  // Reset district selection when county changes
+  // Reset table-selected district when county changes
   useEffect(() => {
     setSelectedDistrict(null);
     setActiveTab("data");
   }, [breakdown?.fips]);
 
-  // Auto-select district when triggered from map click (initialDistrict arrives after county loads)
+  // Reset tab when map district changes
   useEffect(() => {
-    if (initialDistrict) {
-      setSelectedDistrict(initialDistrict);
-      setActiveTab("data");
-    }
-  }, [initialDistrict]);
+    if (mapDistrict) setActiveTab("data");
+  }, [mapDistrict]);
 
   const tierColor = breakdown
     ? (TIER_COLOR[breakdown.risk_tier] ?? "#4A5E78")
@@ -376,7 +376,140 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, initialDistr
     );
   }
 
-  // ── District selected view ──────────────────────────────────────────────────
+  // ── Map-clicked district view (uses GeoJSON props directly, no async lookup) ──
+  if (mapDistrict && breakdown) {
+    const distTierColor = TIER_COLOR[mapDistrict.risk_tier] ?? "#4A5E78";
+    const countyDiff    = mapDistrict.mmr_coverage_pct - breakdown.mmr_coverage_pct;
+    const mmrColor      = TIER_COLOR[mapDistrict.risk_tier] ?? "#4A5E78";
+    const gap           = Math.max(0, 95 - mapDistrict.mmr_coverage_pct);
+
+    return (
+      <div style={{
+        width: "100%", height: "100%", background: "#fff",
+        borderLeft: "1px solid #D0DAE8", display: "flex", flexDirection: "column",
+        fontFamily: "'Trebuchet MS', Arial, sans-serif", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{ background: distTierColor, color: "#fff", padding: "10px 14px 12px", flexShrink: 0 }}>
+          <button
+            onClick={onClearMapDistrict}
+            style={{
+              background: "rgba(255,255,255,0.15)", border: "none", color: "#fff",
+              borderRadius: 4, padding: "3px 10px", cursor: "pointer",
+              fontSize: 11, marginBottom: 8, display: "flex", alignItems: "center", gap: 5,
+              fontFamily: "'Trebuchet MS', Arial, sans-serif",
+            }}
+          >
+            ← {mapDistrict.county_name} County
+          </button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 10, opacity: 0.85, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+                {mapDistrict.risk_tier} RISK — School District
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2, lineHeight: 1.3 }}>
+                {mapDistrict.district_name}
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 32, fontWeight: 700, lineHeight: 1, fontFamily: "monospace" }}>
+                {mapDistrict.composite_score.toFixed(0)}
+              </div>
+              <div style={{ fontSize: 10, opacity: 0.75 }}>/ 100</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab bar */}
+        <div style={{ display: "flex", borderBottom: "1px solid #D0DAE8", background: "#f9fafc", flexShrink: 0 }}>
+          {(["data", "ai"] as SidebarTab[]).map((t) => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              flex: 1, padding: "10px 0", background: activeTab === t ? "#fff" : "transparent",
+              border: "none", borderBottom: activeTab === t ? `2px solid ${distTierColor}` : "2px solid transparent",
+              color: activeTab === t ? "#1A2744" : "#7A92AB",
+              fontSize: 12, fontWeight: activeTab === t ? 700 : 400,
+              fontFamily: "'Trebuchet MS', Arial, sans-serif",
+              cursor: "pointer", letterSpacing: "0.04em", transition: "color 0.12s, background 0.12s",
+            }}>
+              {t === "data" ? "Data" : "AI Analysis"}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+          {/* Data tab */}
+          <div style={{ display: activeTab === "data" ? "block" : "none", height: "100%", overflowY: "auto", padding: 16 }}>
+            {/* MMR coverage bar */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                <span style={{ color: "#4A5E78" }}>MMR Coverage</span>
+                <span style={{ fontFamily: "monospace", color: mmrColor }}>
+                  {mapDistrict.mmr_coverage_pct.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ position: "relative", height: 12 }}>
+                <div style={{ background: "#e8eef6", borderRadius: 4, height: "100%", overflow: "hidden" }}>
+                  <div style={{ width: `${mapDistrict.mmr_coverage_pct}%`, height: "100%", background: mmrColor, borderRadius: 4 }} />
+                </div>
+                <div style={{ position: "absolute", left: "95%", top: -2, width: 2, height: 16, background: "#1A2744", borderRadius: 1 }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                <span style={{ fontSize: 10, color: gap > 0 ? "#C22828" : "#1E8A4C" }}>
+                  {gap > 0 ? `${gap.toFixed(1)}pp below herd immunity threshold` : "Above herd immunity threshold ✓"}
+                </span>
+                <span style={{ fontSize: 10, color: "#7A92AB" }}>95%</span>
+              </div>
+            </div>
+
+            {/* Composite layer breakdown */}
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+              Layer Scores
+            </div>
+            <Row label="Vaccination Coverage (40%)" value={mapDistrict.coverage_score}     color="#1E8A4C" />
+            <Row label="Surveillance (35%) ↗ county" value={mapDistrict.surveillance_score} color="#D45F00" />
+            <Row label="Network (25%) ↗ county"      value={mapDistrict.network_score}      color="#2F5FA8" />
+
+            {/* County comparison */}
+            <div style={{ borderTop: "1px solid #e8eef6", paddingTop: 12, marginTop: 4 }}>
+              <div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+                vs. {mapDistrict.county_name} County
+              </div>
+              <div style={{ fontSize: 12, color: "#4A5E78", lineHeight: 2 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>County MMR avg</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{breakdown.mmr_coverage_pct.toFixed(1)}%</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>District vs. county MMR</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: countyDiff >= 0 ? "#1E8A4C" : "#C22828" }}>
+                    {countyDiff >= 0 ? "+" : ""}{countyDiff.toFixed(1)}pp
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>County composite score</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: TIER_COLOR[breakdown.risk_tier] ?? "#4A5E78" }}>
+                    {breakdown.composite_score.toFixed(0)} ({breakdown.risk_tier})
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* AI tab */}
+          <div style={{ display: activeTab === "ai" ? "block" : "none", height: "100%", overflowY: "auto", padding: 16 }}>
+            <AIAnalyst
+              fips={breakdown.fips}
+              countyName={breakdown.county_name}
+              leaId={mapDistrict.lea_geoid}
+              districtName={mapDistrict.district_name}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── District selected view (from DistrictTable click) ──────────────────────
   if (selectedDistrict) {
     return (
       <div style={{
