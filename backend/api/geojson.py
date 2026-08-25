@@ -20,10 +20,11 @@ STATE_FILES = {
 }
 
 
-def _district_tier(mmr: float) -> str:
-    if mmr < 80:  return "CRITICAL"
-    if mmr < 85:  return "HIGH"
-    if mmr < 92:  return "MODERATE"
+def _district_tier(coverage_score: float) -> str:
+    """Tier from coverage score using the same thresholds as county composite scores."""
+    if coverage_score >= 75: return "CRITICAL"
+    if coverage_score >= 50: return "HIGH"
+    if coverage_score >= 25: return "MODERATE"
     return "LOW"
 
 
@@ -142,27 +143,6 @@ def get_district_geojson(state: str):
         ).fetchall()
     }
 
-    # Pull county risk tiers from hotspot_scores so districts inherit county classification
-    latest_row = con.execute(
-        """SELECT MAX(hs.score_date) FROM hotspot_scores hs
-           JOIN geographies g ON hs.fips = g.fips
-           WHERE g.state_abbr = ?""",
-        [state.upper()],
-    ).fetchone()
-    score_date = latest_row[0] if latest_row and latest_row[0] else None
-    county_tiers: dict[str, str] = {}
-    if score_date:
-        county_tiers = {
-            r[0]: r[1]
-            for r in con.execute(
-                """SELECT hs.fips, hs.risk_tier
-                   FROM hotspot_scores hs
-                   JOIN geographies g ON hs.fips = g.fips
-                   WHERE g.state_abbr = ? AND hs.score_date = ?""",
-                [state.upper(), score_date],
-            ).fetchall()
-        }
-
     with open(dist_path, "r", encoding="utf-8") as f:
         fc = json.load(f)
 
@@ -184,10 +164,9 @@ def get_district_geojson(state: str):
             # Deterministic variation ±5 points, seeded by GEOID
             rng = random.Random(hash(str(geoid)) & 0x7FFFFFFF)
             delta = rng.gauss(0, 3.5)
-            mmr = round(max(60.0, min(99.0, county_mmr + delta)), 1)
-            # Use county's composite tier so district map matches county map
-            tier  = county_tiers.get(fips, _district_tier(mmr))
+            mmr   = round(max(60.0, min(99.0, county_mmr + delta)), 1)
             score = _district_coverage_score(mmr)
+            tier  = _district_tier(score)
             props.update({
                 "has_score": True,
                 "mmr_coverage_pct": mmr,
