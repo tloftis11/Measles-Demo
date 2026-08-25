@@ -92,8 +92,7 @@ export function HotspotMap({ state, onSelect, selectedFips }: Props) {
     }
 
     const isDistrict = viewMode === "district";
-    // Districts only available for TX currently; other states fall back to counties
-    const url = (isDistrict && state === "tx")
+    const url = isDistrict
       ? `${BASE}/api/geojson/${state}/districts`
       : `${BASE}/api/geojson/${state}/counties`;
 
@@ -176,8 +175,7 @@ export function HotspotMap({ state, onSelect, selectedFips }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFips]);
 
-  // District view toggle: only show for TX (districts not yet available for ID/PA)
-  const showDistrictToggle = state === "tx";
+  const showDistrictToggle = true;
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

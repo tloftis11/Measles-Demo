@@ -53,9 +53,14 @@ def get_scored_geojson(state: str):
 
     con = get_connection()
 
-    # Use the latest available score date; compute today's only if nothing exists
+    # Use the latest available score date for this state; compute today's only if none exist
     today = date.today().isoformat()
-    latest_row = con.execute("SELECT MAX(score_date) FROM hotspot_scores").fetchone()
+    latest_row = con.execute(
+        """SELECT MAX(hs.score_date) FROM hotspot_scores hs
+           JOIN geographies g ON hs.fips = g.fips
+           WHERE g.state_abbr = ?""",
+        [state.upper()],
+    ).fetchone()
     score_date = latest_row[0] if latest_row and latest_row[0] else None
     if not score_date:
         score_all_counties(state, con)
@@ -63,11 +68,12 @@ def get_scored_geojson(state: str):
 
     # Query hotspot_scores directly — no geographies JOIN so all scored counties appear
     rows = con.execute(
-        """SELECT fips, composite_score, coverage_score,
-                  surveillance_score, network_score, risk_tier
-           FROM hotspot_scores
-           WHERE score_date = ?""",
-        [score_date],
+        """SELECT hs.fips, hs.composite_score, hs.coverage_score,
+                  hs.surveillance_score, hs.network_score, hs.risk_tier
+           FROM hotspot_scores hs
+           JOIN geographies g ON hs.fips = g.fips
+           WHERE g.state_abbr = ? AND hs.score_date = ?""",
+        [state.upper(), score_date],
     ).fetchall()
 
     score_map = {
@@ -108,11 +114,11 @@ def get_district_geojson(state: str):
     that preserves the county aggregate.
     """
     state = state.lower()
-    dist_path = GEOJSON_DIR / "tx_districts.geojson"
+    dist_path = GEOJSON_DIR / f"{state}_districts.geojson"
     if not dist_path.exists():
         raise HTTPException(
             status_code=503,
-            detail="District GeoJSON not found. Run: python scripts/fetch_district_geojson.py",
+            detail=f"District GeoJSON not found for {state}. Run: python scripts/fetch_district_geojson.py",
         )
 
     con = get_connection()
