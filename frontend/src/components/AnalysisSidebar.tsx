@@ -313,9 +313,10 @@ interface Props {
   breakdown: ScoreBreakdown | undefined;
   isLoading?: boolean;
   onSimulate?: () => void;
+  initialDistrict?: SchoolDistrict | null;
 }
 
-export function AnalysisSidebar({ breakdown, isLoading, onSimulate }: Props) {
+export function AnalysisSidebar({ breakdown, isLoading, onSimulate, initialDistrict }: Props) {
   const [activeTab, setActiveTab]             = useState<SidebarTab>("data");
   const [selectedDistrict, setSelectedDistrict] = useState<SchoolDistrict | null>(null);
 
@@ -324,6 +325,14 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate }: Props) {
     setSelectedDistrict(null);
     setActiveTab("data");
   }, [breakdown?.fips]);
+
+  // Auto-select district when triggered from map click (initialDistrict arrives after county loads)
+  useEffect(() => {
+    if (initialDistrict) {
+      setSelectedDistrict(initialDistrict);
+      setActiveTab("data");
+    }
+  }, [initialDistrict]);
 
   const tierColor = breakdown
     ? (TIER_COLOR[breakdown.risk_tier] ?? "#4A5E78")

@@ -33,13 +33,24 @@ function tierStyle(tier: string | null, thin = false): L.PathOptions {
 
 type ViewMode = "county" | "district";
 
+export interface DistrictMapProps {
+  lea_geoid: string;
+  district_name: string;
+  county_name: string;
+  county_fips: string;   // 5-digit county fips
+  mmr_coverage_pct: number;
+  risk_tier: string;
+  coverage_score: number;
+}
+
 interface Props {
   state: string;
   onSelect: (fips: string) => void;
+  onSelectDistrict?: (district: DistrictMapProps) => void;
   selectedFips: string | null;
 }
 
-export function HotspotMap({ state, onSelect, selectedFips }: Props) {
+export function HotspotMap({ state, onSelect, onSelectDistrict, selectedFips }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef        = useRef<L.Map | null>(null);
   const layerRef      = useRef<L.GeoJSON | null>(null);
@@ -122,7 +133,22 @@ export function HotspotMap({ state, onSelect, selectedFips }: Props) {
                   `Score: <strong>${Number(p.composite_score).toFixed(1)}</strong> — ${p.risk_tier}`;
 
               layer.bindTooltip(label, { sticky: true, opacity: 0.95 });
-              layer.on("click", () => { if (fips) onSelect(fips); });
+              layer.on("click", () => {
+                if (!fips) return;
+                if (isDistrict && onSelectDistrict) {
+                  onSelectDistrict({
+                    lea_geoid:        String(p.lea_geoid ?? ""),
+                    district_name:    String(p.district_name ?? ""),
+                    county_name:      String(p.county_name ?? ""),
+                    county_fips:      fips,
+                    mmr_coverage_pct: Number(p.mmr_coverage_pct ?? 0),
+                    risk_tier:        String(p.risk_tier ?? ""),
+                    coverage_score:   Number(p.coverage_score ?? 0),
+                  });
+                } else {
+                  onSelect(fips);
+                }
+              });
               layer.on("mouseover", function () {
                 (this as L.Path).setStyle({ weight: isDistrict ? 1.5 : 2, color: "#1A2744" });
               });
@@ -236,8 +262,8 @@ export function HotspotMap({ state, onSelect, selectedFips }: Props) {
           fontFamily: "'Trebuchet MS', Arial, sans-serif", maxWidth: 240,
           boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
         }}>
-          Showing <strong>coverage risk only</strong> (MMR%) at district level.
-          Click any district to open the county panel.
+          Showing <strong>coverage risk</strong> (MMR%) at district level.
+          Click any district for district details.
         </div>
       )}
     </div>
