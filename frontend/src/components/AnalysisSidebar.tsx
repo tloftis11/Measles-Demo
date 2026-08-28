@@ -314,12 +314,13 @@ interface Props {
   breakdown: ScoreBreakdown | undefined;
   isLoading?: boolean;
   onSimulate?: () => void;
+  state?: string;
   /** District selected by clicking on the map polygon — synchronous, no async fetch */
   mapDistrict?: DistrictMapProps | null;
   onClearMapDistrict?: () => void;
 }
 
-export function AnalysisSidebar({ breakdown, isLoading, onSimulate, mapDistrict, onClearMapDistrict }: Props) {
+export function AnalysisSidebar({ breakdown, isLoading, onSimulate, state = "tx", mapDistrict, onClearMapDistrict }: Props) {
   const [activeTab, setActiveTab]             = useState<SidebarTab>("data");
   const [selectedDistrict, setSelectedDistrict] = useState<SchoolDistrict | null>(null);
 
@@ -500,8 +501,19 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, mapDistrict,
             <AIAnalyst
               fips={breakdown.fips}
               countyName={breakdown.county_name}
+              state={state}
               leaId={mapDistrict.lea_geoid}
               districtName={mapDistrict.district_name}
+              districtData={{
+                district_name:      mapDistrict.district_name,
+                mmr_coverage_pct:   mapDistrict.mmr_coverage_pct,
+                composite_score:    mapDistrict.composite_score,
+                coverage_score:     mapDistrict.coverage_score,
+                surveillance_score: mapDistrict.surveillance_score,
+                network_score:      mapDistrict.network_score,
+                risk_tier:          mapDistrict.risk_tier,
+                county_name:        mapDistrict.county_name,
+              }}
             />
           </div>
         </div>
@@ -587,6 +599,7 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, mapDistrict,
             <AIAnalyst
               fips={breakdown.fips}
               countyName={breakdown.county_name}
+              state={state}
               leaId={selectedDistrict.lea_id}
               districtName={selectedDistrict.district_name}
             />
@@ -746,6 +759,7 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, mapDistrict,
           <AIAnalyst
             fips={breakdown.fips}
             countyName={breakdown.county_name}
+            state={state}
           />
         </div>
       </div>

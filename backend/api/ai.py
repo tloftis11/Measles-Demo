@@ -22,6 +22,9 @@ class DistrictAnalystRequest(BaseModel):
     lea_id: str
     fips: str
     state: str = "tx"
+    # When set (map-click path), district data comes pre-populated from GeoJSON;
+    # backend skips the school_districts DB lookup entirely.
+    district_data: dict | None = None
 
 
 class NarrativeRequest(BaseModel):
@@ -43,7 +46,7 @@ def district_analyst(req: DistrictAnalystRequest):
     """Stream a Claude Opus risk analysis for a specific school district."""
     con = get_connection()
     def generate():
-        yield from stream_district_analyst(req.lea_id, req.fips, con)
+        yield from stream_district_analyst(req.lea_id, req.fips, con, req.district_data)
     return StreamingResponse(generate(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 

@@ -210,6 +210,7 @@ export default function App() {
               breakdown={breakdown as ScoreBreakdown | undefined}
               isLoading={breakdownLoading && !!selectedFips}
               onSimulate={() => setTab("simulate")}
+              state={selectedState}
               mapDistrict={selectedMapDistrict}
               onClearMapDistrict={() => setSelectedMapDistrict(null)}
             />

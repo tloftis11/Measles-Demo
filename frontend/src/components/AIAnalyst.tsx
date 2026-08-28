@@ -62,15 +62,29 @@ function AnalysisText({ text, streaming }: { text: string; streaming: boolean })
   );
 }
 
+interface DistrictData {
+  district_name: string;
+  mmr_coverage_pct: number;
+  composite_score: number;
+  coverage_score: number;
+  surveillance_score: number;
+  network_score: number;
+  risk_tier: string;
+  county_name: string;
+}
+
 interface Props {
   fips: string;
   countyName: string;
+  state?: string;
   autoRun?: boolean;
-  leaId?: string;       // when set, routes to district-analyst endpoint
+  leaId?: string;
   districtName?: string;
+  /** Pre-populated district data from GeoJSON (map-click path) — avoids DB LEAID lookup */
+  districtData?: DistrictData;
 }
 
-export function AIAnalyst({ fips, countyName, autoRun, leaId, districtName }: Props) {
+export function AIAnalyst({ fips, countyName, state = "tx", autoRun, leaId, districtName, districtData }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [text, setText] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -84,8 +98,8 @@ export function AIAnalyst({ fips, countyName, autoRun, leaId, districtName }: Pr
     try {
       const endpoint = leaId ? `${BASE}/api/ai/district-analyst` : `${BASE}/api/ai/analyst`;
       const body = leaId
-        ? JSON.stringify({ fips: targetFips, lea_id: leaId, state: "tx" })
-        : JSON.stringify({ fips: targetFips, state: "tx" });
+        ? JSON.stringify({ fips: targetFips, lea_id: leaId, state, district_data: districtData ?? null })
+        : JSON.stringify({ fips: targetFips, state });
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

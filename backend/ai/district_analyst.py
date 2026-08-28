@@ -42,6 +42,52 @@ Keep the total response under 350 words. Use specific numbers. \
 Do not use markdown formatting."""
 
 
+def _build_district_context_from_map(
+    lea_id: str, fips: str, district_data: dict, con: duckdb.DuckDBPyConnection
+) -> dict:
+    """Build context from GeoJSON-derived district_data (map-click path)."""
+    geo = con.execute(
+        "SELECT county_name, state_abbr FROM geographies WHERE fips = ?", [fips]
+    ).fetchone()
+    county_avg = con.execute(
+        "SELECT mmr_coverage_pct FROM vaccination_coverage WHERE fips = ? ORDER BY school_year DESC LIMIT 1",
+        [fips],
+    ).fetchone()
+    county_score = con.execute(
+        "SELECT composite_score, risk_tier FROM hotspot_scores WHERE fips = ? ORDER BY score_date DESC LIMIT 1",
+        [fips],
+    ).fetchone()
+    state_avg = con.execute(
+        """SELECT AVG(vc.mmr_coverage_pct)
+           FROM vaccination_coverage vc
+           JOIN geographies g ON vc.fips = g.fips
+           WHERE g.state_abbr = ? AND vc.school_year = '2023-2024'""",
+        [geo[1] if geo else "TX"],
+    ).fetchone()
+
+    mmr_pct = float(district_data.get("mmr_coverage_pct", 0))
+    return {
+        "lea_id":                    lea_id,
+        "district_name":             district_data.get("district_name", "Unknown District"),
+        "enrollment":                None,  # not available from GeoJSON
+        "mmr_coverage_pct":          mmr_pct,
+        "nonmedical_exempt_pct":     None,
+        "medical_exempt_pct":        None,
+        "composite_score":           district_data.get("composite_score"),
+        "coverage_score":            district_data.get("coverage_score"),
+        "surveillance_score":        district_data.get("surveillance_score"),
+        "network_score":             district_data.get("network_score"),
+        "risk_tier":                 district_data.get("risk_tier"),
+        "county_name":               geo[0] if geo else district_data.get("county_name", "Unknown"),
+        "county_avg_mmr":            round(county_avg[0], 1) if county_avg else None,
+        "county_composite_score":    county_score[0] if county_score else None,
+        "county_risk_tier":          county_score[1] if county_score else None,
+        "state_avg_mmr":             round(state_avg[0], 1) if state_avg and state_avg[0] else None,
+        "rank_in_county":            None,
+        "total_districts_in_county": None,
+    }
+
+
 def _build_district_context(
     lea_id: str, fips: str, con: duckdb.DuckDBPyConnection
 ) -> dict | None:
@@ -125,15 +171,39 @@ def _build_district_context(
 
 
 def _build_district_prompt(ctx: dict) -> str:
-    rank_text = (
-        f"Ranked {ctx['rank_in_county']} of {ctx['total_districts_in_county']} "
-        f"districts in {ctx['county_name']} County by MMR coverage (1 = lowest)"
-        if ctx["rank_in_county"] is not None else "Ranking unavailable"
-    )
-
     county_tier = ctx.get("county_risk_tier") or "UNKNOWN"
     county_score = ctx.get("county_composite_score")
     county_score_text = f"{county_score:.0f}/100" if county_score is not None else "N/A"
+
+    # Composite score section — shown when available (map-click path)
+    composite_lines = ""
+    if ctx.get("composite_score") is not None:
+        composite_lines = (
+            f"  • Composite risk score: {ctx['composite_score']:.0f}/100 ({ctx.get('risk_tier','?')} RISK)\n"
+            f"  • Coverage layer score: {ctx.get('coverage_score', 0):.0f}/100\n"
+            f"  • Surveillance layer (county): {ctx.get('surveillance_score', 0):.0f}/100\n"
+            f"  • Network layer (county): {ctx.get('network_score', 0):.0f}/100\n"
+        )
+
+    # Enrollment / exemption section — shown when available (DistrictTable path)
+    enrollment_lines = ""
+    if ctx.get("enrollment") is not None:
+        nm = ctx.get("nonmedical_exempt_pct", 0) or 0
+        med = ctx.get("medical_exempt_pct", 0) or 0
+        nm_count = ctx.get("nm_exempt_count", 0) or 0
+        unprotected = ctx.get("unprotected_students", 0) or 0
+        enrollment_lines = (
+            f"  • Non-medical exemptions: {nm:.1f}% of students ({nm_count:,} students)\n"
+            f"  • Medical exemptions: {med:.1f}%\n"
+            f"  • Total enrolled: {ctx['enrollment']:,}\n"
+            f"  • Estimated unprotected students: ~{unprotected:,}\n"
+        )
+
+    rank_text = (
+        f"Ranked {ctx['rank_in_county']} of {ctx['total_districts_in_county']} "
+        f"districts in {ctx['county_name']} County by MMR coverage (1 = lowest)"
+        if ctx.get("rank_in_county") is not None else "Ranking unavailable"
+    )
 
     return f"""Analyze the measles risk profile for {ctx['district_name']} school district.
 
@@ -143,11 +213,7 @@ COUNTY CONTEXT: {ctx['county_name']} County — {county_tier} RISK (score {count
 VACCINATION DATA (school year 2023-2024):
   • MMR coverage: {ctx['mmr_coverage_pct']:.1f}% (herd immunity threshold: 95%)
   • Gap to herd immunity: {max(0, 95 - ctx['mmr_coverage_pct']):.1f} percentage points
-  • Non-medical exemptions: {ctx['nonmedical_exempt_pct']:.1f}% of students ({ctx['nm_exempt_count']:,} students)
-  • Medical exemptions: {ctx['medical_exempt_pct']:.1f}%
-  • Total enrolled: {ctx['enrollment']:,}
-  • Estimated unprotected students: ~{ctx['unprotected_students']:,}
-
+{composite_lines}{enrollment_lines}
 BENCHMARKS:
   • County average MMR: {ctx['county_avg_mmr']}%
   • Statewide average MMR: {ctx['state_avg_mmr']}%
@@ -157,10 +223,20 @@ Provide your district-specific analysis now."""
 
 
 def stream_district_analyst(
-    lea_id: str, fips: str, con: duckdb.DuckDBPyConnection
+    lea_id: str,
+    fips: str,
+    con: duckdb.DuckDBPyConnection,
+    district_data: dict | None = None,
 ) -> Generator[str, None, None]:
-    """Yield SSE-formatted events: text deltas, then [DONE]."""
-    ctx = _build_district_context(lea_id, fips, con)
+    """Yield SSE-formatted events: text deltas, then [DONE].
+
+    When district_data is provided (map-click path), uses those values directly
+    and skips the school_districts DB lookup to avoid LEAID format mismatches.
+    """
+    if district_data:
+        ctx = _build_district_context_from_map(lea_id, fips, district_data, con)
+    else:
+        ctx = _build_district_context(lea_id, fips, con)
     if ctx is None:
         yield f"data: {json.dumps({'type': 'error', 'message': f'District {lea_id} not found'})}\n\n"
         return
