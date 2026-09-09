@@ -54,7 +54,7 @@ def _build_district_context_from_map(
         [fips],
     ).fetchone()
     county_score = con.execute(
-        "SELECT composite_score, risk_tier FROM hotspot_scores WHERE fips = ? ORDER BY score_date DESC LIMIT 1",
+        "SELECT composite_score, risk_tier, scoring_source FROM hotspot_scores WHERE fips = ? ORDER BY score_date DESC LIMIT 1",
         [fips],
     ).fetchone()
     state_avg = con.execute(
@@ -78,6 +78,7 @@ def _build_district_context_from_map(
         "surveillance_score":        district_data.get("surveillance_score"),
         "network_score":             district_data.get("network_score"),
         "risk_tier":                 district_data.get("risk_tier"),
+        "scoring_source":            district_data.get("scoring_source", "internal_engine"),
         "county_name":               geo[0] if geo else district_data.get("county_name", "Unknown"),
         "county_avg_mmr":            round(county_avg[0], 1) if county_avg else None,
         "county_composite_score":    county_score[0] if county_score else None,
@@ -116,7 +117,7 @@ def _build_district_context(
 
     # County risk score/tier
     county_score = con.execute(
-        "SELECT composite_score, risk_tier FROM hotspot_scores WHERE fips = ? ORDER BY score_date DESC LIMIT 1",
+        "SELECT composite_score, risk_tier, scoring_source FROM hotspot_scores WHERE fips = ? ORDER BY score_date DESC LIMIT 1",
         [fips],
     ).fetchone()
 
@@ -164,6 +165,7 @@ def _build_district_context(
         "county_avg_mmr": round(county_avg[0], 1) if county_avg else None,
         "county_composite_score": county_score[0] if county_score else None,
         "county_risk_tier": county_score[1] if county_score else None,
+        "scoring_source": county_score[2] if county_score else "internal_engine",
         "state_avg_mmr": round(state_avg[0], 1) if state_avg and state_avg[0] else None,
         "rank_in_county": rank_row[0] if rank_row else None,
         "total_districts_in_county": total_districts[0] if total_districts else None,
@@ -175,15 +177,28 @@ def _build_district_prompt(ctx: dict) -> str:
     county_score = ctx.get("county_composite_score")
     county_score_text = f"{county_score:.0f}/100" if county_score is not None else "N/A"
 
-    # Composite score section — shown when available (map-click path)
+    # Composite score section — shown when available (map-click path). These
+    # values are always the COUNTY's score (districts have no reliable score
+    # of their own -- see api/geojson.py's flat-broadcast for why), so the
+    # wording says so plainly rather than implying a district-level number.
     composite_lines = ""
     if ctx.get("composite_score") is not None:
-        composite_lines = (
-            f"  • Composite risk score: {ctx['composite_score']:.0f}/100 ({ctx.get('risk_tier','?')} RISK)\n"
-            f"  • Coverage layer score: {ctx.get('coverage_score', 0):.0f}/100\n"
-            f"  • Surveillance layer (county): {ctx.get('surveillance_score', 0):.0f}/100\n"
-            f"  • Network layer (county): {ctx.get('network_score', 0):.0f}/100\n"
-        )
+        if ctx.get("scoring_source") == "hermesboost":
+            composite_lines = (
+                f"  • County risk score (this district has no score of its own): "
+                f"{ctx['composite_score']:.0f}/100 percentile ({ctx.get('risk_tier','?')} RISK)\n"
+                f"  • County likelihood of any confirmed case: {ctx.get('probability_pct', 0):.1f}%\n"
+                f"  • County predicted case count if one occurs: {ctx.get('predicted_magnitude', 0):.1f}\n"
+                f"  • District MMR variance within county: {ctx.get('network_score', 0):.0f}/100\n"
+            )
+        else:
+            composite_lines = (
+                f"  • Composite risk score (county-level, this district has no score of "
+                f"its own): {ctx['composite_score']:.0f}/100 ({ctx.get('risk_tier','?')} RISK)\n"
+                f"  • Coverage layer score: {ctx.get('coverage_score', 0):.0f}/100\n"
+                f"  • Surveillance layer (county): {ctx.get('surveillance_score', 0):.0f}/100\n"
+                f"  • Network layer (county): {ctx.get('network_score', 0):.0f}/100\n"
+            )
 
     # Enrollment / exemption section — shown when available (DistrictTable path)
     enrollment_lines = ""

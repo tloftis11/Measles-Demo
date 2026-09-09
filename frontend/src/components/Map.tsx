@@ -44,6 +44,9 @@ export interface DistrictMapProps {
   surveillance_score: number;
   network_score: number;
   risk_tier: string;
+  scoring_source?: "hermesboost" | "internal_engine";
+  probability_pct?: number | null;
+  predicted_magnitude?: number | null;
 }
 
 interface Props {
@@ -150,6 +153,9 @@ export function HotspotMap({ state, onSelect, onSelectDistrict, selectedFips }: 
                     surveillance_score: Number(p.surveillance_score ?? 0),
                     network_score:      Number(p.network_score ?? 0),
                     risk_tier:          String(p.risk_tier ?? ""),
+                    scoring_source:     p.scoring_source as "hermesboost" | "internal_engine" | undefined,
+                    probability_pct:    p.probability_pct != null ? Number(p.probability_pct) : null,
+                    predicted_magnitude: p.predicted_magnitude != null ? Number(p.predicted_magnitude) : null,
                   });
                 } else {
                   onSelect(fips);

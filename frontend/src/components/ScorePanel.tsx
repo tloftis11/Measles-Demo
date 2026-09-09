@@ -229,8 +229,8 @@ export function ScorePanel({
         {/* Key stat chips */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           {[
-            ["MMR Coverage",   `${data.mmr_coverage_pct.toFixed(1)}%`],
-            ["Non-Med Exempt", `${data.nonmedical_exempt_pct.toFixed(1)}%`],
+            ["MMR Coverage",   data.mmr_coverage_pct != null ? `${data.mmr_coverage_pct.toFixed(1)}%` : "—"],
+            ["Non-Med Exempt", data.nonmedical_exempt_pct != null ? `${data.nonmedical_exempt_pct.toFixed(1)}%` : "—"],
             ["Recent Cases",   String(data.recent_cases)],
             ["Population",     data.population.toLocaleString()],
           ].map(([label, val]) => (
@@ -245,35 +245,60 @@ export function ScorePanel({
           ))}
         </div>
 
-        {/* Layer bars */}
-        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
-          Layer Scores
-        </div>
-        <Row label="Vaccination Coverage (40%)" value={data.coverage_score}    color="#1E8A4C" />
-        <Row label="Surveillance (35%)"          value={data.surveillance_score} color="#D45F00" />
-        <Row label="Network (25%)"               value={data.network_score}      color="#2F5FA8" />
-
-        {/* Sub-score grid */}
-        <div style={{ borderTop: "1px solid #e8eef6", marginTop: 12, paddingTop: 12 }}>
-          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
-            Sub-scores
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px", fontSize: 12, color: "#4A5E78" }}>
-            {([
-              ["Coverage gap", data.coverage_gap_score],
-              ["Exemption",    data.exemption_score],
-              ["Incidence",    data.incidence_score],
-              ["Wastewater",   data.wastewater_score],
-              ["Mobility",     data.mobility_score],
-              ["Community",    data.community_score],
-            ] as [string, number][]).map(([label, val]) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>{label}</span>
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{val.toFixed(1)}</span>
+        {data.scoring_source === "hermesboost" ? (
+          <>
+            {/* HermesBoost: a trained ML model's likelihood + predicted severity, not a hand-weighted formula */}
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+              Risk Model (HermesBoost)
+            </div>
+            <Row label="Likelihood of any case" value={data.probability_pct ?? 0} color="#1E8A4C" />
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                <span style={{ color: "#4A5E78" }}>Predicted cases if one occurs</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                  {(data.predicted_magnitude ?? 0).toFixed(1)}
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+            <Row label="District MMR variance" value={data.network_score} color="#2F5FA8" />
+            <div style={{ fontSize: 10.5, color: "#7A92AB", marginTop: 4 }}>
+              Composite score is this county's percentile rank among currently-scored
+              Texas counties (100 = highest relative risk).
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Layer bars */}
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+              Layer Scores
+            </div>
+            <Row label="Vaccination Coverage (40%)" value={data.coverage_score ?? 0}    color="#1E8A4C" />
+            <Row label="Surveillance (35%)"          value={data.surveillance_score ?? 0} color="#D45F00" />
+            <Row label="Network (25%)"               value={data.network_score}      color="#2F5FA8" />
+
+            {/* Sub-score grid */}
+            <div style={{ borderTop: "1px solid #e8eef6", marginTop: 12, paddingTop: 12 }}>
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+                Sub-scores
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px", fontSize: 12, color: "#4A5E78" }}>
+                {([
+                  ["Coverage gap", data.coverage_gap_score],
+                  ["Exemption",    data.exemption_score],
+                  ["Incidence",    data.incidence_score],
+                  ["Wastewater",   data.wastewater_score],
+                  ["Mobility",     data.mobility_score],
+                  ["Community",    data.community_score],
+                ] as [string, number | null][]).map(([label, val]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{label}</span>
+                    <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{(val ?? 0).toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* School district drill-down */}
         <DistrictTable fips={data.fips} />

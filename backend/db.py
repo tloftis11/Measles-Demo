@@ -120,6 +120,18 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection) -> None:
     except Exception:
         pass
 
+    # Migrate existing hotspot_scores tables that predate the HermesBoost
+    # integration -- additive columns only, old internal-engine rows are
+    # unaffected (scoring_source defaults to 'internal_engine').
+    try:
+        existing_cols = {row[0] for row in con.execute("DESCRIBE hotspot_scores").fetchall()}
+        if 'scoring_source' not in existing_cols:
+            con.execute("ALTER TABLE hotspot_scores ADD COLUMN scoring_source VARCHAR DEFAULT 'internal_engine'")
+            con.execute("ALTER TABLE hotspot_scores ADD COLUMN probability_pct DOUBLE")
+            con.execute("ALTER TABLE hotspot_scores ADD COLUMN predicted_magnitude DOUBLE")
+    except Exception:
+        pass
+
     # Seed each state independently so adding a new state never requires wiping the DB
     def _state_missing(abbr: str) -> bool:
         r = con.execute("SELECT COUNT(*) FROM geographies WHERE state_abbr = ?", [abbr]).fetchone()

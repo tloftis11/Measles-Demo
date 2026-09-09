@@ -200,7 +200,9 @@ function DistrictDataView({
                  : district.mmr_coverage_pct < 92 ? "#C9920C"
                  : "#1E8A4C";
 
-  const countyDiff = district.mmr_coverage_pct - countyBreakdown.mmr_coverage_pct;
+  const countyDiff = countyBreakdown.mmr_coverage_pct != null
+    ? district.mmr_coverage_pct - countyBreakdown.mmr_coverage_pct
+    : null;
 
   return (
     <div>
@@ -258,18 +260,20 @@ function DistrictDataView({
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>County avg MMR ({countyBreakdown.county_name})</span>
             <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
-              {countyBreakdown.mmr_coverage_pct.toFixed(1)}%
+              {countyBreakdown.mmr_coverage_pct != null ? `${countyBreakdown.mmr_coverage_pct.toFixed(1)}%` : "—"}
             </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>vs. county avg</span>
-            <span style={{
-              fontFamily: "monospace", fontWeight: 700,
-              color: countyDiff >= 0 ? "#1E8A4C" : "#C22828",
-            }}>
-              {countyDiff >= 0 ? "+" : ""}{countyDiff.toFixed(1)}pp
-            </span>
-          </div>
+          {countyDiff != null && (
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>vs. county avg</span>
+              <span style={{
+                fontFamily: "monospace", fontWeight: 700,
+                color: countyDiff >= 0 ? "#1E8A4C" : "#C22828",
+              }}>
+                {countyDiff >= 0 ? "+" : ""}{countyDiff.toFixed(1)}pp
+              </span>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>County risk score</span>
             <span style={{ fontFamily: "monospace", fontWeight: 700, color: TIER_COLOR[countyBreakdown.risk_tier] ?? "#4A5E78" }}>
@@ -463,12 +467,35 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, state = "tx"
             </div>
 
             {/* Composite layer breakdown */}
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
-              Layer Scores
-            </div>
-            <Row label="Vaccination Coverage (40%)" value={mapDistrict.coverage_score}     color="#1E8A4C" />
-            <Row label="Surveillance (35%) ↗ county" value={mapDistrict.surveillance_score} color="#D45F00" />
-            <Row label="Network (25%) ↗ county"      value={mapDistrict.network_score}      color="#2F5FA8" />
+            {mapDistrict.scoring_source === "hermesboost" ? (
+              <>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+                  Risk Model (HermesBoost) ↗ county
+                </div>
+                <Row label="Likelihood of any case" value={mapDistrict.probability_pct ?? 0} color="#1E8A4C" />
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                    <span style={{ color: "#4A5E78" }}>Predicted cases if one occurs</span>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                      {(mapDistrict.predicted_magnitude ?? 0).toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+                <Row label="District MMR variance ↗ county" value={mapDistrict.network_score} color="#2F5FA8" />
+                <div style={{ fontSize: 10, color: "#7A92AB", marginTop: 2 }}>
+                  This district has no score of its own — these are {mapDistrict.county_name} County's values.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+                  Layer Scores
+                </div>
+                <Row label="Vaccination Coverage (40%)" value={mapDistrict.coverage_score}     color="#1E8A4C" />
+                <Row label="Surveillance (35%) ↗ county" value={mapDistrict.surveillance_score} color="#D45F00" />
+                <Row label="Network (25%) ↗ county"      value={mapDistrict.network_score}      color="#2F5FA8" />
+              </>
+            )}
 
             {/* County comparison */}
             <div style={{ borderTop: "1px solid #e8eef6", paddingTop: 12, marginTop: 4 }}>
@@ -629,8 +656,9 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, state = "tx"
             <div style={{ fontSize: 17, fontWeight: 700, marginTop: 2 }}>
               {breakdown.county_name} County
             </div>
-            {/* Velocity chip */}
-            {(breakdown.score_velocity !== 0 || breakdown.velocity_modifier !== 0) && (
+            {/* Velocity chip -- only meaningful for the internal engine's rows */}
+            {breakdown.score_velocity != null && breakdown.velocity_modifier != null &&
+              (breakdown.score_velocity !== 0 || breakdown.velocity_modifier !== 0) && (
               <div style={{ marginTop: 6 }}>
                 <VelocityChip
                   velocity={breakdown.score_velocity}
@@ -683,8 +711,8 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, state = "tx"
           {/* Key stat chips */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
             {([
-              ["MMR Coverage",   `${breakdown.mmr_coverage_pct.toFixed(1)}%`],
-              ["Non-Med Exempt", `${breakdown.nonmedical_exempt_pct.toFixed(1)}%`],
+              ["MMR Coverage",   breakdown.mmr_coverage_pct != null ? `${breakdown.mmr_coverage_pct.toFixed(1)}%` : "—"],
+              ["Non-Med Exempt", breakdown.nonmedical_exempt_pct != null ? `${breakdown.nonmedical_exempt_pct.toFixed(1)}%` : "—"],
               ["Recent Cases",   String(breakdown.recent_cases)],
               ["Population",     breakdown.population.toLocaleString()],
             ] as [string, string][]).map(([label, val]) => (
@@ -699,36 +727,62 @@ export function AnalysisSidebar({ breakdown, isLoading, onSimulate, state = "tx"
             ))}
           </div>
 
-          {/* Layer bars */}
-          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
-            Layer Scores
-          </div>
-          <Row label="Vaccination Coverage (40%)" value={breakdown.coverage_score}    color="#1E8A4C" />
-          <Row label="Surveillance (35%)"          value={breakdown.surveillance_score} color="#D45F00" />
-          <Row label="Network (25%)"               value={breakdown.network_score}      color="#2F5FA8" />
-
-          {/* Sub-scores — now includes district_variance */}
-          <div style={{ borderTop: "1px solid #e8eef6", marginTop: 12, paddingTop: 12 }}>
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
-              Sub-scores
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px", fontSize: 12, color: "#4A5E78" }}>
-              {([
-                ["Coverage gap",      breakdown.coverage_gap_score],
-                ["Exemption",         breakdown.exemption_score],
-                ["District variance", breakdown.district_variance_score],
-                ["Incidence",         breakdown.incidence_score],
-                ["Wastewater",        breakdown.wastewater_score],
-                ["Mobility",          breakdown.mobility_score],
-                ["Community",         breakdown.community_score],
-              ] as [string, number][]).map(([label, val]) => (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>{label}</span>
-                  <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{val.toFixed(1)}</span>
+          {breakdown.scoring_source === "hermesboost" ? (
+            <>
+              {/* HermesBoost methodology -- no hand-weighted layers, so show
+                  the real model outputs instead */}
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+                Model Outputs
+              </div>
+              <Row label="Likelihood of any case" value={breakdown.probability_pct ?? 0} color="#1E8A4C" />
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                  <span style={{ color: "#4A5E78" }}>Predicted cases if one occurs</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                    {(breakdown.predicted_magnitude ?? 0).toFixed(1)}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+              <Row label="District MMR variance" value={breakdown.network_score} color="#2F5FA8" />
+              <div style={{ fontSize: 11, color: "#7A92AB", marginTop: 4 }}>
+                Scored by a trained HermesBoost model, not the hand-weighted
+                40/35/25 formula used for Idaho and Pennsylvania.
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Layer bars */}
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+                Layer Scores
+              </div>
+              <Row label="Vaccination Coverage (40%)" value={breakdown.coverage_score ?? 0}    color="#1E8A4C" />
+              <Row label="Surveillance (35%)"          value={breakdown.surveillance_score ?? 0} color="#D45F00" />
+              <Row label="Network (25%)"               value={breakdown.network_score}      color="#2F5FA8" />
+
+              {/* Sub-scores — now includes district_variance */}
+              <div style={{ borderTop: "1px solid #e8eef6", marginTop: 12, paddingTop: 12 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7A92AB", marginBottom: 8 }}>
+                  Sub-scores
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px", fontSize: 12, color: "#4A5E78" }}>
+                  {([
+                    ["Coverage gap",      breakdown.coverage_gap_score],
+                    ["Exemption",         breakdown.exemption_score],
+                    ["District variance", breakdown.district_variance_score],
+                    ["Incidence",         breakdown.incidence_score],
+                    ["Wastewater",        breakdown.wastewater_score],
+                    ["Mobility",          breakdown.mobility_score],
+                    ["Community",         breakdown.community_score],
+                  ] as [string, number | null][]).map(([label, val]) => (
+                    <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>{label}</span>
+                      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{(val ?? 0).toFixed(1)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* District drill-down */}
           <DistrictTable fips={breakdown.fips} onSelect={(d) => {
