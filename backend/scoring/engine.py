@@ -294,7 +294,10 @@ def score_all_counties(
 
         con.execute(
             """
-            INSERT OR REPLACE INTO hotspot_scores VALUES (?,?,?,?,?,?,?,?)
+            INSERT OR REPLACE INTO hotspot_scores
+            (fips, score_date, coverage_score, surveillance_score, network_score,
+             composite_score, risk_tier, score_components, scoring_source)
+            VALUES (?,?,?,?,?,?,?,?,?)
             """,
             [
                 fips,
@@ -305,6 +308,7 @@ def score_all_counties(
                 sc.composite_score,
                 sc.risk_tier,
                 json.dumps(asdict(sc)),
+                "internal_engine",
             ],
         )
         results.append({"fips": fips, **asdict(sc)})
